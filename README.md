@@ -36,10 +36,39 @@ things3 mark <task-id> --done
 
 ## Install
 
-Install the latest stable [Rust toolchain](https://rustup.rs/) (including Cargo)
-and Git, then choose one of the methods below.
+### Prebuilt binaries
 
-### From this repository (recommended)
+Download the archive for your platform from the
+[latest release](https://github.com/mh1412/things3-cloud-tui/releases/latest):
+
+| Platform | v0.10.1 download |
+| --- | --- |
+| macOS — Apple Silicon (ARM64) | [macos-arm64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-macos-arm64.tar.gz) |
+| macOS — Intel (AMD64) | [macos-amd64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-macos-amd64.tar.gz) |
+| Linux — ARM64 | [linux-arm64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-linux-arm64.tar.gz) |
+| Linux — AMD64 / x86-64 | [linux-amd64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-linux-amd64.tar.gz) |
+
+Each archive contains the `things3` executable and license. Extract it and
+place the executable on your `PATH`. For example, after downloading the
+macOS ARM64 archive into the current directory:
+
+```bash
+tar -xzf things3-v0.10.1-macos-arm64.tar.gz
+mkdir -p ~/.local/bin
+install -m 755 things3 ~/.local/bin/things3
+export PATH="$HOME/.local/bin:$PATH"
+things3 tui --help
+```
+
+Add that `PATH` setting to your shell configuration to keep it across sessions.
+Linux binaries are built on Ubuntu 22.04 with glibc. Release assets include
+`SHA256SUMS`; verify downloaded archives with `shasum -a 256` on macOS or
+`sha256sum` on Linux and compare with the published checksums.
+
+### Build from this repository
+
+Requires Git and the latest stable [Rust toolchain](https://rustup.rs/)
+(including Cargo).
 
 ```bash
 cargo install --git https://github.com/mh1412/things3-cloud-tui.git --branch main --locked things3-cloud

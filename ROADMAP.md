@@ -1,34 +1,26 @@
-# Roadmap
+# things3-cloud-tui roadmap
 
-This document tracks upcoming work for `things3-cloud`.
+This fork focuses on a keyboard-first terminal interface for Things Cloud.
+The [README feature overview](README.md#features) describes what is available
+today. The upstream project's development plans are maintained separately in
+[evanpurkhiser/things3-cloud](https://github.com/evanpurkhiser/things3-cloud).
 
-## Current feature set baseline
+## Current gaps and potential follow-up work
 
-See the supported feature list in `README.md` for the current baseline.
+These are candidates for future work, not scheduled releases or commitments.
 
-## Next up
+- **Durable pending changes:** the autosave queue currently lives in memory.
+  Persisting it would allow recovery after an interrupted session.
+- **Concurrent-edit reconciliation:** stale-history retries refresh the cloud
+  head, but the TUI does not provide a complete three-way merge or conflict UI.
+- **Project, area, and tag management in the TUI:** tasks can use these
+  containers and tags; their metadata management remains a CLI workflow.
+- **Recurrence and reminders:** no full TUI editor or complete repeater
+  bookkeeping is implemented. Existing protocol support does not imply all
+  recurring-task mutations are available.
 
-- [ ] Audit all views to ensure they are written with the same taste
-      as components
-- [ ] Add views for all mutation commands
-- [ ] Remove legacy formatting code
-      (audit to ensure we are not printing directly)
-- [ ] Update views to generate a shared output object usable
-      for JSON serialization or UI component rendering
-- [ ] Add an option for JSON output using the shared output object
+## Implementation references
 
-## Additional feature work
-
-- [ ] Add/remove/rename headers for projects
-- [ ] Add reminder support
-  - [ ] Read reminder settings
-  - [ ] Set reminders
-  - [ ] Edit reminders
-  - [ ] Remove reminders
-- [ ] Resolve recurring items
-- [ ] Mark items as recurring
-- [ ] Add recurring scheduling support
-  - [ ] Read recurrence rules
-  - [ ] Create recurrence rules
-  - [ ] Edit recurrence rules
-  - [ ] Remove recurrence rules
+- [Interactive usage and keybindings](README.md#interactive-mode)
+- [Things Cloud API reference](doc/README.md)
+- [Sync behavior and known limitations](doc/sync-and-recovery.md)

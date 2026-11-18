@@ -1,6 +1,6 @@
 # things3-cloud-tui
 
-[![Main](https://github.com/evanpurkhiser/things3-cloud/actions/workflows/main.yml/badge.svg)](https://github.com/evanpurkhiser/things3-cloud/actions/workflows/main.yml)
+[![Main](https://github.com/mh1412/things3-cloud-tui/actions/workflows/main.yml/badge.svg)](https://github.com/mh1412/things3-cloud-tui/actions/workflows/main.yml)
 
 A Rust command-line client for [Things 3](https://culturedcode.com/things/)
 that talks directly to the Things Cloud API.
@@ -36,28 +36,49 @@ things3 mark <task-id> --done
 
 ## Install
 
-Via Homebrew:
+Install the latest stable [Rust toolchain](https://rustup.rs/) (including Cargo)
+and Git, then choose one of the methods below.
+
+### From this repository (recommended)
 
 ```bash
-brew install evanpurkhiser/personal/things3-cloud
+cargo install --git https://github.com/mh1412/things3-cloud-tui.git --branch main --locked things3-cloud
 ```
 
-Via Arch Linux AUR:
+The Cargo package is still named `things3-cloud`; the repository URL above
+installs **this TUI fork**. The executable is named `things3` and is installed
+in Cargo's binary directory (normally `~/.cargo/bin`). Ensure that directory
+is on your `PATH`.
+
+### From a local checkout
 
 ```bash
-yay -S things3-cloud
+git clone https://github.com/mh1412/things3-cloud-tui.git
+cd things3-cloud-tui
+cargo install --path . --locked
 ```
 
-From crates.io:
+To try the TUI from the checkout without installing:
 
 ```bash
-cargo install things3-cloud
+cargo run --locked -- tui
 ```
 
-From source:
+### Update or replace a Cargo installation
 
 ```bash
-cargo install --path .
+cargo install --git https://github.com/mh1412/things3-cloud-tui.git --branch main --locked --force things3-cloud
+```
+
+If you also have another `things3` installed, use `command -v things3` to check
+which executable your shell resolves. You can launch this installation directly
+with `~/.cargo/bin/things3 tui` when using Cargo's default installation directory.
+
+### Launch
+
+```bash
+things3 set-auth
+things3 tui
 ```
 
 ## Configure auth
@@ -178,42 +199,36 @@ cargo run -- --load-journal tests/fixtures/tui.json tui --view inbox
 A loaded journal (or `--no-cloud`) enables **local preview**: status changes
 stay in memory, and `r` reloads the original fixture/cache.
 
-## Supported features
+## Features
 
-Roadmap items are tracked in [`ROADMAP.md`](ROADMAP.md).
+### Keyboard-first navigation
 
-- [x] Configure auth with `set-auth` (stored in XDG state)
-- [x] Incremental sync with local cache for fast startup
-- [x] `--no-sync` flag to skip cloud sync and use local cache only
+- Inbox, Today, Upcoming, Anytime, Someday, Logbook, and Projects tabs.
+- Gmail-style navigation, highlighted multi-selection, and list search across
+  titles, notes, and checklists.
+- Shared details panel with view/edit modes and a responsive two-pane layout.
+- Dark styling with Nerd Font, emoji, or plain-text icons.
 
-### Views
+### Task and checklist workflows
 
-- [x] `inbox`, `today`, `upcoming`, `anytime`, `someday`, `logbook`
-- [x] `projects` / `project <id>`, `areas` / `area <id>`, `tags`
-- [x] Show notes via `--detailed`
-- [x] Show checklist items via `--detailed`
-- [x] `find` with title/notes/checklists
-      and tag/area/project/status/date filters
-- [x] `tui` — interactive lists, search, details, and completion toggles
+- Inline quick create, followed by detailed editing when needed.
+- Editable titles, notes, tags, project/area location, schedules, and deadlines.
+- Calendar picker and quick Today/Someday scheduling.
+- Checklist creation, editing, completion, cancellation, and reordering.
+- Batch completion, reopening, cancellation, scheduling, and trashing.
+- Single-task and multi-selection reordering within supported lists.
 
-### Tasks
+### Sync and local preview
 
-- [x] `new` — create tasks with title, notes, tags, when, deadline, and position
-- [x] `edit` — rename, set/remove notes, move, add/remove tags
-      (multi-ID supported)
-- [x] `edit --add-checklist/--remove-checklist/--rename-checklist`
-- [x] `mark` — done/incomplete/canceled (multi-ID supported)
-- [x] `mark --check/--uncheck/--check-cancel` for checklist toggles
-- [x] `schedule` — when/start date, deadline, today/evening/someday
-- [ ] Read and update recurrence schedules
-- [x] `reorder` — reorder tasks within lists
-- [x] `delete` — trash tasks
+- Optimistic local updates and coalesced cloud saves after keyboard inactivity.
+- Pending/saved status, retained queues on failure, and stale-history retry.
+- Incremental sync and cached reads through the upstream Cloud client.
+- Fixture-based local preview for trying workflows and recording demos.
 
-### Projects / Areas / Tags
+The inherited CLI commands remain available for scripting and workflows outside
+the TUI. Run `things3 --help` or `things3 <command> --help` for their options.
 
-- [x] `projects new` / `projects edit`
-- [x] `areas new` / `areas edit`
-- [x] `tags new` / `tags edit` / `tags delete`
+See [the roadmap](ROADMAP.md) for this fork's scope and current gaps.
 
 ## Testing
 

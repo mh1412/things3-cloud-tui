@@ -33,6 +33,66 @@ pub enum Action {
     Trash,
 }
 
+pub struct ReorderSelection {
+    pub visible: Vec<ThingsId>,
+    pub selected: Vec<ThingsId>,
+    pub down: bool,
+    pub today_order: bool,
+    pub preserve_dates: bool,
+}
+
+pub fn reorder_selection(
+    state: &RawState,
+    selection: &ReorderSelection,
+    now: f64,
+    today: i64,
+) -> Result<WireItem> {
+    use crate::commands::reorder::{ReorderArgs, reorder_changes};
+    let selected: HashSet<_> = selection.selected.iter().collect();
+    let mut order = selection.visible.clone();
+    let mut staged = state.clone();
+    let mut changes = WireItem::new();
+    let mut positions: Vec<_> = (0..order.len().saturating_sub(1)).collect();
+    if selection.down {
+        positions.reverse();
+    }
+    for position in positions {
+        let (from, to) = if selection.down {
+            (position, position + 1)
+        } else {
+            (position + 1, position)
+        };
+        if !selected.contains(&order[from]) || selected.contains(&order[to]) {
+            continue;
+        }
+        let store = ThingsStore::from_raw_state(&staged);
+        if selection.preserve_dates {
+            let task = store
+                .get_task(&order[from].to_string())
+                .ok_or_else(|| anyhow!("Task no longer exists"))?;
+            let anchor = store
+                .get_task(&order[to].to_string())
+                .ok_or_else(|| anyhow!("Anchor no longer exists"))?;
+            ensure!(
+                task.start_date == anchor.start_date,
+                "Upcoming tasks can be reordered within the same date"
+            );
+        }
+        let args = ReorderArgs {
+            item_id: order[from].to_string(),
+            before_id: (!selection.down).then(|| order[to].to_string()),
+            after_id: selection.down.then(|| order[to].to_string()),
+        };
+        let step = reorder_changes(&args, &store, now, today, selection.today_order)?;
+        fold_item(step.clone(), &mut staged);
+        for (id, object) in step {
+            merge(&mut changes, id, object);
+        }
+        order.swap(from, to);
+    }
+    Ok(changes)
+}
+
 fn merge(changes: &mut WireItem, id: String, object: WireObject) {
     if let Some(existing) = changes.get_mut(&id) {
         let mut props = existing.properties_map();
@@ -233,9 +293,18 @@ pub fn save_plan(state: &RawState, draft: &Draft, now: f64, today: i64) -> Resul
         .as_ref()
         .map(|t| t.checklist_items.as_slice())
         .unwrap_or_default();
-    let mut next_index = current_items.iter().map(|c| c.index).max().unwrap_or(-1);
+    let desired_ids: Vec<_> = draft
+        .checklist
+        .iter()
+        .filter(|item| !item.title.value.trim().is_empty())
+        .map(|item| &item.id)
+        .collect();
+    let current_ids: Vec<_> = current_items.iter().map(|item| &item.uuid).collect();
+    let order_changed = desired_ids != current_ids;
     let mut seen = HashSet::new();
-    for item in &draft.checklist {
+    for (position, item) in draft.checklist.iter().enumerate() {
+        let position =
+            i32::try_from(position).map_err(|_| anyhow!("Checklist ordering overflow"))?;
         ensure!(
             seen.insert(item.id.clone()),
             "Duplicate checklist identifier"
@@ -244,11 +313,12 @@ pub fn save_plan(state: &RawState, draft: &Draft, now: f64, today: i64) -> Resul
         if let Some(before) = original_items.iter().find(|c| c.uuid == item.id) {
             let changed_title = title != before.title;
             let changed_status = item.status != before.status;
+            let changed_index = order_changed && before.index != position;
             ensure!(
                 !title.is_empty(),
                 "Checklist titles cannot be empty; use Ctrl-D to remove an item"
             );
-            if changed_title || changed_status {
+            if changed_title || changed_status || changed_index {
                 ensure!(
                     current_items.iter().any(|c| c.uuid == item.id),
                     "A checklist item was removed elsewhere; refresh before editing it"
@@ -260,6 +330,7 @@ pub fn save_plan(state: &RawState, draft: &Draft, now: f64, today: i64) -> Resul
                         ChecklistItemPatch {
                             title: changed_title.then(|| title.to_string()),
                             status: changed_status.then_some(item.status),
+                            sort_index: changed_index.then_some(position),
                             stop_date: changed_status.then_some(
                                 if item.status == TaskStatus::Incomplete {
                                     None
@@ -274,9 +345,6 @@ pub fn save_plan(state: &RawState, draft: &Draft, now: f64, today: i64) -> Resul
                 );
             }
         } else if !title.is_empty() {
-            next_index = next_index
-                .checked_add(1)
-                .ok_or_else(|| anyhow!("Checklist ordering overflow"))?;
             changes.insert(
                 item.id.to_string(),
                 WireObject::create(
@@ -285,7 +353,7 @@ pub fn save_plan(state: &RawState, draft: &Draft, now: f64, today: i64) -> Resul
                         title: title.into(),
                         task_ids: vec![draft.id.clone()],
                         status: item.status,
-                        sort_index: next_index,
+                        sort_index: position,
                         creation_date: Some(now),
                         modification_date: Some(now),
                         stop_date: if item.status == TaskStatus::Incomplete {
@@ -308,6 +376,21 @@ pub fn save_plan(state: &RawState, draft: &Draft, now: f64, today: i64) -> Resul
         }
     }
     Ok(changes)
+}
+
+/// Rebase an editor snapshot on our latest optimistic state so that reverting
+/// a field to its original value also undoes an earlier autosaved edit.
+pub fn autosave_plan(state: &RawState, draft: &Draft, now: f64, today: i64) -> Result<WireItem> {
+    let mut model = super::model::Model::new(super::model::List::Inbox);
+    model.store = ThingsStore::from_raw_state(state);
+    let task = model
+        .store
+        .get_task(&draft.id.to_string())
+        .ok_or_else(|| anyhow!("Task no longer exists"))?;
+    let mut current = super::editor::Editor::edit(&model, task).draft;
+    current.fields = draft.fields.clone();
+    current.checklist = draft.checklist.clone();
+    save_plan(state, &current, now, today)
 }
 
 pub fn batch_plan(
@@ -510,6 +593,152 @@ mod tests {
         assert_eq!(
             ThingsStore::from_raw_state(&state).today(&today)[1].uuid,
             first
+        );
+    }
+
+    #[test]
+    fn autosave_can_revert_title_and_edit_new_checklist_items() {
+        let (mut state, model) = fixture();
+        let task = model.tasks[0].clone();
+        let original_title = task.title.clone();
+        let mut editor = Editor::edit(&model, task);
+        editor.draft.fields[0] = super::super::editor::Input::new("Changed");
+        fold_item(
+            autosave_plan(&state, &editor.draft, 100.0, 0).unwrap(),
+            &mut state,
+        );
+        editor.draft.fields[0] = super::super::editor::Input::new(&original_title);
+        editor.add_item();
+        editor.input().unwrap().insert("New step", false);
+        fold_item(
+            autosave_plan(&state, &editor.draft, 101.0, 0).unwrap(),
+            &mut state,
+        );
+        editor.input().unwrap().insert(" edited", false);
+        fold_item(
+            autosave_plan(&state, &editor.draft, 102.0, 0).unwrap(),
+            &mut state,
+        );
+        let task = ThingsStore::from_raw_state(&state)
+            .get_task(&editor.draft.id.to_string())
+            .unwrap();
+        assert_eq!(task.title, original_title);
+        assert!(
+            task.checklist_items
+                .iter()
+                .any(|item| item.title == "New step edited")
+        );
+        assert!(
+            autosave_plan(&state, &editor.draft, 103.0, 0)
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn multi_reorder_preserves_blocks_gaps_and_boundaries() {
+        use crate::wire::task::TaskProps;
+        let ids: Vec<ThingsId> = (0..4).map(|_| ThingsId::random()).collect();
+        let item = ids
+            .iter()
+            .enumerate()
+            .map(|(i, id)| {
+                (
+                    id.to_string(),
+                    WireObject::create(
+                        EntityType::Task7,
+                        TaskProps {
+                            title: format!("Task {i}"),
+                            sort_index: i as i32,
+                            creation_date: Some(1.0),
+                            ..Default::default()
+                        },
+                    ),
+                )
+            })
+            .collect::<WireItem>();
+        let original = fold_items([item]);
+        for (selected, down, expected) in [
+            (vec![0, 1], true, vec![2, 0, 1, 3]),
+            (vec![1, 2], false, vec![1, 2, 0, 3]),
+            (vec![0, 2], true, vec![1, 0, 3, 2]),
+            (vec![1, 3], false, vec![1, 0, 3, 2]),
+            (vec![2, 3], true, vec![0, 1, 2, 3]),
+            (vec![0, 1], false, vec![0, 1, 2, 3]),
+            (vec![0, 1, 2, 3], true, vec![0, 1, 2, 3]),
+        ] {
+            let selection = ReorderSelection {
+                visible: ids.clone(),
+                selected: selected.iter().map(|i| ids[*i].clone()).collect(),
+                down,
+                today_order: false,
+                preserve_dates: false,
+            };
+            let mut state = original.clone();
+            fold_item(
+                reorder_selection(&state, &selection, 100.0, 0).unwrap(),
+                &mut state,
+            );
+            let result: Vec<_> = ThingsStore::from_raw_state(&state)
+                .inbox()
+                .into_iter()
+                .map(|t| t.uuid)
+                .collect();
+            let expected: Vec<_> = expected.into_iter().map(|i| ids[i].clone()).collect();
+            assert_eq!(result, expected, "selected={selected:?}, down={down}");
+        }
+    }
+
+    #[test]
+    fn checklist_reordering_autosaves_order_and_preserves_identity() {
+        use iocraft::prelude::{KeyCode, KeyModifiers};
+        let (mut state, mut model) = fixture();
+        let mut editor = Editor::edit(&model, model.tasks[0].clone());
+        let first = editor.draft.checklist[0].id.clone();
+        editor.add_item();
+        editor.input().unwrap().insert("Second step", false);
+        let second = editor.draft.checklist[1].id.clone();
+        fold_item(
+            autosave_plan(&state, &editor.draft, 100.0, 0).unwrap(),
+            &mut state,
+        );
+        editor.view_mode();
+        assert!(editor.view_key(KeyCode::Char('K'), KeyModifiers::NONE));
+        assert_eq!(editor.focus, super::super::editor::CHECKLIST);
+        fold_item(
+            autosave_plan(&state, &editor.draft, 101.0, 0).unwrap(),
+            &mut state,
+        );
+        model.store = ThingsStore::from_raw_state(&state);
+        let task = model.store.get_task(&editor.draft.id.to_string()).unwrap();
+        assert_eq!(
+            task.checklist_items
+                .iter()
+                .map(|item| item.uuid.clone())
+                .collect::<Vec<_>>(),
+            vec![second.clone(), first.clone()]
+        );
+        assert!(!editor.view_key(KeyCode::Char('K'), KeyModifiers::NONE));
+        assert!(editor.view_key(KeyCode::Char('J'), KeyModifiers::NONE));
+        fold_item(
+            autosave_plan(&state, &editor.draft, 102.0, 0).unwrap(),
+            &mut state,
+        );
+        let task = ThingsStore::from_raw_state(&state)
+            .get_task(&editor.draft.id.to_string())
+            .unwrap();
+        assert_eq!(
+            task.checklist_items
+                .iter()
+                .map(|item| item.uuid.clone())
+                .collect::<Vec<_>>(),
+            vec![first, second]
+        );
+        assert!(!editor.view_key(KeyCode::Char('J'), KeyModifiers::NONE));
+        assert!(
+            autosave_plan(&state, &editor.draft, 103.0, 0)
+                .unwrap()
+                .is_empty()
         );
     }
 }

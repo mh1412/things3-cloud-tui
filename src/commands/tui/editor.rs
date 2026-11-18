@@ -8,14 +8,7 @@ use crate::{
 };
 
 pub const CHECKLIST: usize = 6;
-pub const LABELS: [&str; CHECKLIST] = [
-    "Title",
-    "Notes (Enter inserts a line)",
-    "When (inbox / anytime / today / evening / someday / YYYY-MM-DD)",
-    "Deadline (YYYY-MM-DD; blank clears)",
-    "Tags (comma-separated names or IDs)",
-    "Location (project/area name or ID; blank removes location)",
-];
+pub const LABELS: [&str; CHECKLIST] = ["Title", "Notes", "When", "Deadline", "Tags", "Location"];
 
 #[derive(Clone, Debug, Default)]
 pub struct Input {
@@ -145,6 +138,7 @@ impl Draft {
 }
 
 pub struct Editor {
+    pub editing: bool,
     pub draft: Draft,
     pub focus: usize,
 }
@@ -182,6 +176,7 @@ impl Editor {
                 checklist: Vec::new(),
             },
             focus: 0,
+            editing: true,
         }
     }
 
@@ -244,6 +239,7 @@ impl Editor {
                 checklist,
             },
             focus: 0,
+            editing: true,
         }
     }
 
@@ -255,6 +251,86 @@ impl Editor {
                 .checklist
                 .get_mut(self.focus - CHECKLIST)
                 .map(|c| &mut c.title)
+        }
+    }
+
+    pub fn view_mode(&mut self) {
+        self.editing = false;
+        self.focus = self
+            .focus
+            .min((CHECKLIST + self.draft.checklist.len()).saturating_sub(1));
+    }
+
+    /// View navigation never changes text. Return true only for a mutation.
+    pub fn view_key(&mut self, code: KeyCode, modifiers: KeyModifiers) -> bool {
+        if modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) {
+            return false;
+        }
+        let count = CHECKLIST + self.draft.checklist.len();
+        match code {
+            KeyCode::Char('j') | KeyCode::Down | KeyCode::Tab => {
+                self.focus = (self.focus + 1).min(count - 1)
+            }
+            KeyCode::Char('k') | KeyCode::Up | KeyCode::BackTab => {
+                self.focus = self.focus.saturating_sub(1)
+            }
+            KeyCode::Home => self.focus = 0,
+            KeyCode::End => self.focus = count - 1,
+            KeyCode::Char('e') => self.editing = true,
+            KeyCode::Char(c @ ('J' | 'K')) => {
+                let Some(index) = self.focus.checked_sub(CHECKLIST) else {
+                    return false;
+                };
+                if index >= self.draft.checklist.len() {
+                    return false;
+                }
+                let target = if c == 'J' {
+                    index.checked_add(1)
+                } else {
+                    index.checked_sub(1)
+                };
+                if let Some(target) = target.filter(|target| *target < self.draft.checklist.len()) {
+                    self.draft.checklist.swap(index, target);
+                    self.focus = CHECKLIST + target;
+                    return true;
+                }
+            }
+            KeyCode::Char(' ' | '-' | 'y' | 'v') => {
+                if let Some(item) = self
+                    .draft
+                    .checklist
+                    .get_mut(self.focus.wrapping_sub(CHECKLIST))
+                {
+                    item.status = if code == KeyCode::Char('-') {
+                        TaskStatus::Canceled
+                    } else if code == KeyCode::Char('y') {
+                        TaskStatus::Completed
+                    } else if code == KeyCode::Char('v') || item.status == TaskStatus::Completed {
+                        TaskStatus::Incomplete
+                    } else {
+                        TaskStatus::Completed
+                    };
+                    return true;
+                }
+            }
+            KeyCode::Char('t' | 's') => {
+                self.draft.fields[2] = Input::new(if code == KeyCode::Char('t') {
+                    "today"
+                } else {
+                    "someday"
+                });
+                return true;
+            }
+            _ => {}
+        }
+        false
+    }
+
+    pub fn footer(&self) -> &'static str {
+        if self.editing {
+            "EDIT · Tab  move · Esc  view · Autosave on"
+        } else {
+            "VIEW · j/k move · y/v/- status · Space toggle · e edit · u back"
         }
     }
 
@@ -284,7 +360,7 @@ impl Editor {
                 self.draft.checklist.remove(self.focus - CHECKLIST);
                 self.focus = self.focus.min(count - 2);
             }
-            KeyCode::F(2) => {
+            KeyCode::Char('t') if modifiers.contains(KeyModifiers::CONTROL) => {
                 if let Some(item) = self
                     .draft
                     .checklist
@@ -308,16 +384,57 @@ impl Editor {
         }
     }
 
-    pub fn lines(&self, width: usize) -> (Vec<(String, bool)>, usize) {
+    pub fn hint(&self) -> &'static str {
+        if !self.editing {
+            return match self.focus {
+                3 => "Deadline · w / Ctrl-P: calendar · e: edit",
+                CHECKLIST.. => "y/v/- status · Space toggle · Shift-J/K reorder · e edit",
+                _ => "t: Today · s: Someday · w / Ctrl-P: calendar · e: edit",
+            };
+        }
+        match self.focus {
+            0 => "Task title",
+            1 => "Enter: new line",
+            2 => "Ctrl-P: calendar · today / evening / anytime / someday / inbox",
+            3 => "Ctrl-P: calendar · YYYY-MM-DD · blank: none",
+            4 => "Names or IDs, comma-separated",
+            5 => "Project or area name / ID · blank: none",
+            _ => "Enter / Ctrl-N: add · Ctrl-D: remove · Ctrl-T: status",
+        }
+    }
+
+    pub fn lines(&self, width: usize, icons: super::theme::Icons) -> (Vec<(String, bool)>, usize) {
+        self.render_lines(width, icons, true)
+    }
+
+    pub fn preview_lines(&self, width: usize, icons: super::theme::Icons) -> Vec<String> {
+        self.render_lines(width, icons, false)
+            .0
+            .into_iter()
+            .map(|(line, _)| line)
+            .collect()
+    }
+
+    fn render_lines(
+        &self,
+        width: usize,
+        icons: super::theme::Icons,
+        active: bool,
+    ) -> (Vec<(String, bool)>, usize) {
         let mut lines = Vec::new();
         let mut cursor_line = 0;
         for (index, label) in LABELS.iter().enumerate() {
-            let focused = index == self.focus;
-            lines.push((
-                format!("{} {label}", if focused { ">" } else { " " }),
-                focused,
-            ));
-            let value = self.draft.fields[index].display(focused);
+            let focused = active && index == self.focus;
+            if focused {
+                cursor_line = lines.len();
+            }
+            let value = self.draft.fields[index].display(focused && self.editing);
+            let value = if value.is_empty() {
+                "—".into()
+            } else {
+                value
+            };
+            let value = format!(" {} {label:<9}  {value}", icons.field(index));
             for line in super::screen::wrap_lines(&value, width.max(1)) {
                 if focused && line.contains('▏') {
                     cursor_line = lines.len();
@@ -325,15 +442,19 @@ impl Editor {
                 lines.push((line, focused));
             }
         }
-        lines.push(("Checklist (F2 cycles open / done / canceled)".into(), false));
+        lines.push((String::new(), false));
+        lines.push((format!(" {} Checklist", icons.field(CHECKLIST)), false));
         for (index, item) in self.draft.checklist.iter().enumerate() {
-            let focused = self.focus == CHECKLIST + index;
+            let focused = active && self.focus == CHECKLIST + index;
+            if focused {
+                cursor_line = lines.len();
+            }
             let status = match item.status {
                 TaskStatus::Completed => "x",
                 TaskStatus::Canceled => "-",
                 _ => " ",
             };
-            let value = format!("[{status}] {}", item.title.display(focused));
+            let value = format!("[{status}] {}", item.title.display(focused && self.editing));
             for line in super::screen::wrap_lines(&value, width.max(1)) {
                 if focused && line.contains('▏') {
                     cursor_line = lines.len();
@@ -341,17 +462,16 @@ impl Editor {
                 lines.push((line, focused));
             }
         }
-        let add_focused = self.focus == CHECKLIST + self.draft.checklist.len();
+        let add_focused = active && self.focus == CHECKLIST + self.draft.checklist.len();
         if add_focused {
             cursor_line = lines.len();
         }
-        lines.push((
-            format!(
-                "{} Add checklist item (Enter)",
-                if add_focused { ">" } else { "+" }
-            ),
-            add_focused,
-        ));
+        if self.editing && active {
+            lines.push((
+                format!("{} Add item", if add_focused { ">" } else { "+" }),
+                add_focused,
+            ));
+        }
         (lines, cursor_line)
     }
 }
@@ -359,6 +479,45 @@ impl Editor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn view_keys_navigate_and_toggle_without_editing_text() {
+        let mut editor = Editor::create(&Model::new(List::Inbox));
+        editor.draft.fields[0] = Input::new("Original title");
+        editor.add_item();
+        editor.input().unwrap().insert("Step", false);
+        editor.view_mode();
+        for (key, expected) in [
+            ('-', TaskStatus::Canceled),
+            ('v', TaskStatus::Incomplete),
+            ('v', TaskStatus::Incomplete),
+            ('y', TaskStatus::Completed),
+            ('y', TaskStatus::Completed),
+            ('v', TaskStatus::Incomplete),
+        ] {
+            assert!(editor.view_key(KeyCode::Char(key), KeyModifiers::NONE));
+            assert_eq!(editor.draft.checklist[0].status, expected);
+        }
+        assert!(editor.view_key(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert_eq!(editor.draft.checklist[0].status, TaskStatus::Completed);
+        assert!(editor.view_key(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert_eq!(editor.draft.checklist[0].status, TaskStatus::Incomplete);
+        editor.view_key(KeyCode::Home, KeyModifiers::NONE);
+        assert!(!editor.view_key(KeyCode::Char('j'), KeyModifiers::NONE));
+        assert_eq!(editor.focus, 1);
+        editor.view_key(KeyCode::Char('k'), KeyModifiers::NONE);
+        assert_eq!(editor.focus, 0);
+        assert!(!editor.view_key(KeyCode::Char(' '), KeyModifiers::NONE));
+        assert!(editor.view_key(KeyCode::Char('t'), KeyModifiers::NONE));
+        assert_eq!(editor.draft.value(2), "today");
+        assert_eq!(editor.draft.value(0), "Original title");
+        let rendered = editor.lines(80, super::super::theme::Icons::Plain).0;
+        assert!(!rendered.iter().any(|(line, _)| line.contains('▏')));
+        editor.view_key(KeyCode::Char('e'), KeyModifiers::NONE);
+        assert!(editor.editing);
+        editor.key(KeyCode::Char('j'), KeyModifiers::NONE);
+        assert_eq!(editor.draft.value(0), "Original titlej");
+    }
 
     #[test]
     fn unicode_cursor_insertion_and_deletion_preserve_boundaries() {
@@ -379,7 +538,7 @@ mod tests {
         editor.add_item();
         let id = editor.draft.checklist[0].id.clone();
         editor.input().unwrap().insert("Step", false);
-        editor.key(KeyCode::F(2), KeyModifiers::NONE);
+        editor.key(KeyCode::Char('t'), KeyModifiers::CONTROL);
         assert_eq!(editor.draft.checklist[0].id, id);
         assert_eq!(editor.draft.checklist[0].status, TaskStatus::Completed);
         editor.key(KeyCode::Char('d'), KeyModifiers::CONTROL);

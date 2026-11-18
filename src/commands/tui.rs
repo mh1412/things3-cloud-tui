@@ -3,6 +3,7 @@ mod editor;
 mod model;
 mod mutations;
 mod screen;
+mod theme;
 mod worker;
 
 use std::io::{IsTerminal, Write};
@@ -16,6 +17,9 @@ use model::List;
 
 #[derive(Debug, Default, Args)]
 pub struct TuiArgs {
+    /// Icon style (nerd requires a Nerd Font in your terminal)
+    #[arg(long, value_enum, default_value_t = theme::Icons::Nerd)]
+    pub icons: theme::Icons,
     /// List to open initially
     #[arg(long, value_enum, default_value_t = List::Today)]
     pub view: List,
@@ -42,6 +46,7 @@ impl Command for TuiArgs {
                 local,
                 cached: cli.no_sync,
                 no_color: cli.no_color,
+                icons: self.icons,
             )
         };
         smol::block_on(app.fullscreen())?;

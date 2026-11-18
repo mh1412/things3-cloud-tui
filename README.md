@@ -5,6 +5,8 @@
 A Rust command-line client for [Things 3](https://culturedcode.com/things/)
 that talks directly to the Things Cloud API.
 
+Protocol reference: [Things Cloud API documentation](doc/README.md).
+
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/demo-dark.gif">
   <source media="(prefers-color-scheme: light)" srcset=".github/assets/demo-light.gif">
@@ -64,10 +66,17 @@ Environment variables override values in the auth file.
 ```bash
 things3 tui
 things3 tui --view inbox
+things3 tui --icons emoji
+things3 tui --icons plain
 things3 --no-sync tui
 ```
 
 Browse Inbox, Today, Upcoming, Anytime, Someday, Logbook, and Projects.
+The dark theme includes colored panels, focus and selection highlights, and
+status colors. Nerd Font icons are enabled by default: select a Nerd Font
+(such as JetBrainsMono Nerd Font) in your terminal's font settings. Use
+`--icons emoji` for emoji or `--icons plain` for text symbols. The global
+`--no-color` option uses your terminal's default colors.
 Wide terminals show task details alongside the list; on smaller terminals,
 press `Enter` or `d` to see notes, dates, tags, and checklists.
 
@@ -75,46 +84,75 @@ press `Enter` or `d` to see notes, dates, tags, and checklists.
 | --- | --- |
 | `1`–`7`, `Tab`, `←` / `→` | Switch lists |
 | `j` / `k`, `↓` / `↑` | Move the cursor |
-| `c` / `e` | Create / edit a task |
+| `c` / `e` | Quick create / edit details |
 | `x` | Toggle selection of the cursor task |
 | `* a` / `* n` | Select all visible tasks / clear selection |
-| `y` / `v` / `!` | Complete / reopen / cancel |
+| `y` / `v` / `-` | Complete / reopen / cancel (`!` also cancels) |
 | `t` / `s` / `#` | Schedule today / someday / trash |
 | `w` | Open calendar to schedule selected tasks (or the focused task) |
 | `g i`, `g t`, `g a`, `g s`, `g l`, `g p` | Jump to Inbox, Today, Anytime, Someday, Logbook, Projects |
 | `Home` / `End`, `PgUp` / `PgDn` | Jump through the list |
-| `o` / `Enter` | Open a project or toggle task details |
+| `o` / `Enter` | View task details or open a project |
+| `e` | Enter detail edit mode |
 | `/` | Search the current list, including notes and checklists |
 | `Enter` / `Esc` while searching | Keep / clear the filter |
 | `Space` | Complete or reopen the selected task |
-| `Shift-J` / `Shift-K` | Move the focused task down / up |
+| `Shift-J` / `Shift-K` | Move selected tasks (or the focused task) down / up |
 | `Ctrl-D` / `Ctrl-U` | Scroll task details down / up |
 | `u` / `Esc` | Clear the filter or go back |
 | `r` | Refresh |
 | `?` | Show help |
 | `q` / `Ctrl-C` | Quit |
 
-Cloud operations run in a background worker. Status changes use the same
-validation as `mark`, and are shown as saved only after a successful commit.
+Cloud operations run in a background worker. Changes appear locally immediately
+and are queued in memory, then saved together after two seconds without keyboard
+activity. Repeated edits to the same item are combined. The status bar distinguishes
+pending changes from saved changes. Refresh and quit flush the queue first;
+failed saves retain the queue, and a failed quit-save keeps the TUI open.
+Status changes use the same validation as `mark`.
 As with other commands, `--no-sync` skips cloud reads but still permits writes.
 
 Actions apply to selected tasks, or the cursor task when nothing is selected.
-Each batch is validated in full and submitted in one commit. Changing lists
+Each batch is validated in full before entering the save queue. Changing lists
 clears the selection.
 
-Selected rows are highlighted. Reordering applies to the focused task within
-its container; Upcoming preserves date groups and Logbook stays date-ordered.
+Selected rows are highlighted. Reordering moves each selected block one row
+down/up while preserving relative order and selection. Without a selection,
+it moves the focused task. Reordering stays within containers; Upcoming
+preserves date groups and Logbook stays date-ordered.
 
-The task editor includes title, multiline notes, schedule, deadline, tags,
+Press `c` to type a title directly above the list. `Enter` creates the task;
+`Esc` cancels. The new task stays focused, so press `e` to add details.
+
+Details have **view** and **edit** modes in the same panel. On wide terminals,
+opening details focuses the existing right-hand panel; on narrow terminals,
+it fills the screen.
+
+In view mode, `j/k` or arrows move between fields and checklist items. `Space`
+toggles the focused checklist item done/open; `y` completes it, `v` reopens it,
+and `-` cancels it. `t` schedules Today, `s` schedules
+Someday, and `w` opens the calendar (for the deadline when that field is focused,
+otherwise for scheduling). `e` enters edit mode; `u`/`Esc` returns to the list.
+
+On a checklist item, `Shift-J` / `Shift-K` moves it down / up, keeping focus
+on the moved item. Checklist order autosaves with the other detail changes.
+It includes title, multiline notes, schedule, deadline, tags,
 project/area location, and checklist titles and statuses. Use `Tab`/`Shift-Tab`
-to switch fields, `Ctrl-U` to clear a field, `Ctrl-S` to save, and `Esc` to
-discard. In notes, `Enter` inserts a newline. `Ctrl-N` adds a checklist item,
-`Ctrl-D` removes the focused item, and `F2` cycles its status. Failed saves
-keep the draft open. Project metadata editing is not included.
+to switch fields and `Ctrl-U` to clear a field. Edits automatically enter the
+save queue after a brief pause; no save shortcut is required. `Esc` returns to
+view mode while keeping edits (`Ctrl-S` remains an optional equivalent). In notes,
+`Enter` inserts a newline. `Ctrl-N` adds a checklist item,
+`Ctrl-D` removes the focused item, and `Ctrl-T` cycles its status. Failed saves
+keep the editor open. Invalid fields must be corrected before leaving.
+Project metadata editing is not included.
+
+Idle saves refresh cloud history first. If another device advances history
+before the commit, the TUI refreshes and retries once; failed retries keep the
+pending queue.
 
 In the calendar, arrows (or `h/j/k/l`) move by day/week, `PgUp`/`PgDn`
 (or `[`/`]`) change months, and `t` jumps to Today. `Enter` applies the
-date; `Esc`/`u` goes back. In the editor, `F4` opens the calendar for the
+date; `Esc`/`u` goes back. In details, `Ctrl-P` opens the calendar for the
 deadline when that field is focused, otherwise for the schedule field.
 
 To try the interface with sample data from a source checkout:

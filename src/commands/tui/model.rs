@@ -61,6 +61,8 @@ impl List {
 }
 
 pub struct Model {
+    pub edit_changed_at: Option<std::time::Instant>,
+    pub quick_create: bool,
     pub calendar: Option<super::calendar::Calendar>,
     pub checked: std::collections::HashSet<ThingsId>,
     pub prefix: Option<char>,
@@ -83,6 +85,8 @@ pub struct Model {
 impl Model {
     pub fn new(list: List) -> Self {
         Self {
+            edit_changed_at: None,
+            quick_create: false,
             calendar: None,
             checked: Default::default(),
             prefix: None,

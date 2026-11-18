@@ -7,12 +7,14 @@ use super::{
     editor::Editor,
     model::{List, Model, text},
     mutations::Action,
+    theme::{Icons, Palette},
     worker::{Request, Update},
 };
-use crate::{store::Task, wire::task::TaskStatus};
+use crate::wire::task::TaskStatus;
 
 #[derive(Default, Props)]
 pub struct AppProps {
+    pub icons: Icons,
     pub initial_view: List,
     pub requests: Option<mpsc::Sender<Request>>,
     pub events: Option<smol::channel::Receiver<Update>>,
@@ -34,15 +36,6 @@ fn send(model: &mut Model, requests: &mpsc::Sender<Request>, request: Request, m
     }
 }
 
-fn status_icon(task: &Task) -> &'static str {
-    match task.status {
-        TaskStatus::Completed => "[x]",
-        TaskStatus::Canceled => "[-]",
-        _ if task.is_project() => "[+]",
-        _ => "[ ]",
-    }
-}
-
 fn action_ids(model: &Model) -> Vec<crate::ids::ThingsId> {
     if model.checked.is_empty() {
         model
@@ -59,12 +52,31 @@ fn action_ids(model: &Model) -> Vec<crate::ids::ThingsId> {
     }
 }
 
-fn details(model: &Model) -> String {
+fn request_quit(model: &mut Model, requests: &mpsc::Sender<Request>) {
+    if !model.quick_create
+        && let Some(editor) = &model.editor
+    {
+        let _ = requests.send(Request::Edit {
+            draft: Box::new(editor.draft.clone()),
+            close: false,
+        });
+        model.edit_changed_at = None;
+    }
+    match requests.send(Request::Quit) {
+        Ok(()) => {
+            model.busy = true;
+            model.message = "Saving pending changes before exit…".into();
+        }
+        Err(_) => model.message = "Sync worker stopped".into(),
+    }
+}
+
+fn details(model: &Model, icons: Icons) -> String {
     let Some(task) = model.selected_task() else {
         return "Select a task to view its details.".into();
     };
     let mut lines = vec![
-        format!("{} {}", status_icon(task), text(&task.title)),
+        format!("{} {}", icons.task(task), text(&task.title)),
         String::new(),
     ];
     if let Some(id) = model.store.effective_project_uuid(task) {
@@ -117,13 +129,17 @@ fn details(model: &Model) -> String {
     lines.join("\n")
 }
 
-fn detail_lines(model: &Model, terminal_width: u16) -> Vec<String> {
+fn detail_lines(model: &Model, terminal_width: u16, icons: Icons) -> Vec<String> {
     let width = if terminal_width >= 100 {
         terminal_width / 2 - 4
     } else {
         terminal_width.saturating_sub(if terminal_width >= 60 { 19 } else { 2 })
     };
-    wrap_lines(&details(model), usize::from(width).max(1))
+    if let Some(task) = model.selected_task().filter(|task| task.is_todo()) {
+        Editor::edit(model, task.clone()).preview_lines(usize::from(width).max(1), icons)
+    } else {
+        wrap_lines(&details(model, icons), usize::from(width).max(1))
+    }
 }
 
 pub(super) fn wrap_lines(value: &str, width: usize) -> Vec<String> {
@@ -145,7 +161,35 @@ pub(super) fn wrap_lines(value: &str, width: usize) -> Vec<String> {
     result
 }
 
-const HELP: &str = "Keyboard shortcuts\n\nc / e             Create / edit task\nj k / ↑ ↓         Move cursor\nShift-J / Shift-K Move focused task down / up\no / Enter         Open project / task details\nu / Esc           Back / clear search\nx                 Toggle selection (row highlight)\n* a / * n         Select all visible / clear selection\ny / v / !         Complete / reopen / cancel\nt / s / #         Today / someday / trash\nSpace             Toggle completion\nActions apply to selection, or cursor if none selected.\ng i/t/a/s/l/p     Inbox/Today/Anytime/Someday/Logbook/Projects\n1–7 / Tab         Switch lists\n/                 Search; Enter keeps filter\nCtrl-D / Ctrl-U   Scroll details down / up\nr                 Refresh\n? / q             Help / quit\n\nEditor: Tab fields · Ctrl-S save · Esc discard\nCtrl-N add checklist item · Ctrl-D remove · F2 status\nCtrl-U clears field · Enter adds a line in notes\nLocal previews never write to Things Cloud.";
+const HELP: &str = "Keyboard shortcuts
+
+c                 Quick create (Enter confirms)
+o / Enter         View details / open project
+e                 Edit details
+j k / ↑ ↓         Move cursor
+Shift-J / Shift-K Move selection down / up
+u / Esc           Back / clear search
+x                 Toggle selection
+* a / * n         Select all visible / clear
+y / v / -         Complete / reopen / cancel (! also cancels)
+t / s / #         Today / someday / trash
+w                 Calendar
+Space             Toggle completion
+Actions apply to selection, or cursor if none selected.
+g i/t/a/s/l/p     Inbox/Today/Anytime/Someday/Logbook/Projects
+1–7 / Tab         Switch lists
+/                 Search; Enter keeps filter
+Ctrl-D / Ctrl-U   Scroll preview down / up
+r                 Refresh
+? / q             Help / quit
+
+Details view: j/k move · y/v/- status · Space toggle · t/s/w dates · e edit
+Checklist: Shift-J/K reorder
+Details edit: autosave on · Tab fields · Esc view
+Ctrl-P calendar · Ctrl-T checklist status
+Ctrl-N add checklist item · Ctrl-D remove item
+Ctrl-U clear field · Enter new line in notes
+Local previews never write to Things Cloud.";
 
 #[component]
 pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>> {
@@ -159,18 +203,43 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
             let mut state = model.write();
             state.busy = false;
             match update {
+                Update::Status(message) => state.message = message,
+                Update::Quit => quit.set(true),
                 Update::Loaded {
                     store,
                     today,
                     message,
+                    keep_editor,
+                    keep_selection,
                 } => {
-                    let selected = state.selected_task().map(|t| t.uuid.clone());
+                    let created = state
+                        .editor
+                        .as_ref()
+                        .filter(|editor| editor.draft.original.is_none())
+                        .map(|editor| editor.draft.id.clone());
+                    let selected = created
+                        .clone()
+                        .or_else(|| state.selected_task().map(|t| t.uuid.clone()));
                     state.store = *store;
                     state.today = today;
                     state.message = message;
-                    state.editor = None;
-                    state.calendar = None;
-                    state.checked.clear();
+                    if !keep_editor {
+                        state.editor = None;
+                        state.quick_create = false;
+                        state.calendar = None;
+                        state.edit_changed_at = None;
+                    }
+                    if !keep_selection {
+                        state.checked.clear();
+                    }
+                    if created.is_some() {
+                        state.query.clear();
+                        if state.project.is_none()
+                            && matches!(state.list, List::Logbook | List::Projects)
+                        {
+                            state.change_list(List::Inbox);
+                        }
+                    }
                     state.rebuild(selected);
                 }
                 Update::Failed(error) => state.message = format!("Error: {}", text(&error)),
@@ -178,6 +247,38 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
         }
     });
     let requests = props.requests.clone().expect("TUI request sender");
+    let autosave = requests.clone();
+    hooks.use_future(async move {
+        loop {
+            smol::Timer::after(std::time::Duration::from_millis(100)).await;
+            let ready = {
+                let state = model.read();
+                !state.quick_create
+                    && !state.busy
+                    && state.editor.is_some()
+                    && state
+                        .edit_changed_at
+                        .is_some_and(|time| time.elapsed() >= std::time::Duration::from_millis(300))
+            };
+            if ready {
+                let mut state = model.write();
+                let draft = state.editor.as_ref().unwrap().draft.clone();
+                state.edit_changed_at = None;
+                state.message = "Queuing edits…".into();
+                if autosave
+                    .send(Request::Edit {
+                        draft: Box::new(draft),
+                        close: false,
+                    })
+                    .is_err()
+                {
+                    state.message = "Sync worker stopped".into();
+                    break;
+                }
+            }
+        }
+    });
+    let icons = props.icons;
     hooks.use_terminal_events(move |event| {
         let TerminalEvent::Key(KeyEvent {
             code,
@@ -191,8 +292,9 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
         if kind == KeyEventKind::Release {
             return;
         }
+        let _ = requests.send(Request::Activity);
         if code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL) {
-            quit.set(true);
+            request_quit(&mut model.write(), &requests);
             return;
         }
         let mut state = model.write();
@@ -211,6 +313,7 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
                                 super::editor::Input::new(date.format("%Y-%m-%d").to_string());
                         }
                         state.calendar = None;
+                        state.edit_changed_at = Some(std::time::Instant::now());
                     } else {
                         let ids = action_ids(&state);
                         let action = if date == state.today.date_naive() {
@@ -237,7 +340,34 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
             if state.busy {
                 return;
             }
-            if code == KeyCode::F(4) {
+            if state.quick_create {
+                match code {
+                    KeyCode::Esc => {
+                        state.editor = None;
+                        state.quick_create = false;
+                        state.message.clear();
+                    }
+                    KeyCode::Enter => {
+                        let draft = state.editor.as_ref().unwrap().draft.clone();
+                        if draft.value(0).trim().is_empty() {
+                            state.message = "Add a title".into();
+                        } else {
+                            send(
+                                &mut state,
+                                &requests,
+                                Request::Save(Box::new(draft)),
+                                "Creating…",
+                            );
+                        }
+                    }
+                    _ => state.editor.as_mut().unwrap().draft.fields[0].key(code, modifiers, false),
+                }
+                return;
+            }
+            let view_mode = !state.editor.as_ref().unwrap().editing;
+            if (code == KeyCode::Char('p') && modifiers.contains(KeyModifiers::CONTROL))
+                || (view_mode && code == KeyCode::Char('w'))
+            {
                 let editor = state.editor.as_ref().unwrap();
                 let field = if editor.focus == 3 { 3 } else { 2 };
                 let date = chrono::NaiveDate::parse_from_str(editor.draft.value(field), "%Y-%m-%d")
@@ -246,19 +376,31 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
                     date,
                     field: Some(field),
                 });
-            } else if code == KeyCode::Esc {
-                state.editor = None;
-                state.message = "Draft discarded".into();
-            } else if code == KeyCode::Char('s') && modifiers.contains(KeyModifiers::CONTROL) {
+            } else if code == KeyCode::Esc
+                || (view_mode && code == KeyCode::Char('u'))
+                || (code == KeyCode::Char('s') && modifiers.contains(KeyModifiers::CONTROL))
+            {
                 let draft = state.editor.as_ref().unwrap().draft.clone();
+                state.editor.as_mut().unwrap().view_mode();
+                state.edit_changed_at = None;
                 send(
                     &mut state,
                     &requests,
-                    Request::Save(Box::new(draft)),
-                    "Saving…",
+                    Request::Edit {
+                        draft: Box::new(draft),
+                        close: view_mode,
+                    },
+                    "Queuing edits…",
                 );
+            } else if view_mode {
+                if code == KeyCode::Char('q') {
+                    request_quit(&mut state, &requests);
+                } else if state.editor.as_mut().unwrap().view_key(code, modifiers) {
+                    state.edit_changed_at = Some(std::time::Instant::now());
+                }
             } else {
                 state.editor.as_mut().unwrap().key(code, modifiers);
+                state.edit_changed_at = Some(std::time::Instant::now());
             }
             return;
         }
@@ -284,7 +426,7 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
         }
         if state.help {
             match code {
-                KeyCode::Char('q') => quit.set(true),
+                KeyCode::Char('q') => request_quit(&mut state, &requests),
                 KeyCode::Esc | KeyCode::Char('?') | KeyCode::Char('u') => state.help = false,
                 _ => {}
             }
@@ -317,39 +459,27 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
                 state.calendar = Some(Calendar { date, field: None });
             }
             KeyCode::Char('d') if modifiers.contains(KeyModifiers::CONTROL) => {
-                state.detail_scroll = state
-                    .detail_scroll
-                    .saturating_add(1)
-                    .min(detail_lines(&state, width).len().saturating_sub(rows));
+                state.detail_scroll = state.detail_scroll.saturating_add(1).min(
+                    detail_lines(&state, width, icons)
+                        .len()
+                        .saturating_sub(rows),
+                );
             }
             KeyCode::Char('u') if modifiers.contains(KeyModifiers::CONTROL) => {
                 state.detail_scroll = state.detail_scroll.saturating_sub(1);
             }
             KeyCode::Char(c @ ('J' | 'K')) => {
-                let down = c == 'J';
-                let adjacent = if down {
-                    state.selected.checked_add(1)
-                } else {
-                    state.selected.checked_sub(1)
-                };
                 if state.list == List::Logbook {
                     state.message = "Logbook is ordered by completion date".into();
-                } else if let Some((task, anchor)) = state
-                    .selected_task()
-                    .zip(adjacent.and_then(|i| state.tasks.get(i)))
-                {
-                    if state.list == List::Upcoming && task.start_date != anchor.start_date {
-                        state.message =
-                            "Upcoming tasks can be reordered within the same date".into();
-                    } else {
-                        let request = Request::Reorder {
-                            id: task.uuid.clone(),
-                            anchor: anchor.uuid.clone(),
-                            down,
-                            today_order: state.list == List::Today && state.project.is_none(),
-                        };
-                        send(&mut state, &requests, request, "Reordering…");
-                    }
+                } else {
+                    let request = Request::Reorder(Box::new(super::mutations::ReorderSelection {
+                        visible: state.tasks.iter().map(|task| task.uuid.clone()).collect(),
+                        selected: action_ids(&state),
+                        down: c == 'J',
+                        today_order: state.list == List::Today && state.project.is_none(),
+                        preserve_dates: state.list == List::Upcoming,
+                    }));
+                    send(&mut state, &requests, request, "Reordering…");
                 }
             }
             KeyCode::Char(c @ ('*' | 'g')) => {
@@ -368,17 +498,25 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
                     state.checked.insert(id);
                 }
             }
-            KeyCode::Char('c') if !state.busy => state.editor = Some(Editor::create(&state)),
-            KeyCode::Char('e') if !state.busy => {
+            KeyCode::Char('c') if !state.busy => {
+                state.editor = Some(Editor::create(&state));
+                state.quick_create = true;
+                state.message.clear();
+            }
+            KeyCode::Char('e' | 'o' | 'd') | KeyCode::Enter if !state.busy => {
                 if let Some(task) = state.selected_task().cloned() {
                     if task.is_todo() {
-                        state.editor = Some(Editor::edit(&state, task));
+                        let mut editor = Editor::edit(&state, task);
+                        if code != KeyCode::Char('e') {
+                            editor.view_mode();
+                        }
+                        state.editor = Some(editor);
                     } else {
-                        state.message = "Open the project to edit its tasks".into();
+                        state.enter();
                     }
                 }
             }
-            KeyCode::Char('q') => quit.set(true),
+            KeyCode::Char('q') => request_quit(&mut state, &requests),
             KeyCode::Char('?') => state.help = true,
             KeyCode::Char('j') | KeyCode::Down => state.move_selection(1),
             KeyCode::Char('k') | KeyCode::Up => state.move_selection(-1),
@@ -397,10 +535,8 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
             KeyCode::Char(c @ '1'..='7') => state.change_list(List::ALL[(c as u8 - b'1') as usize]),
             KeyCode::Char('/') => state.searching = true,
             KeyCode::Esc | KeyCode::Char('u') => state.escape(),
-            KeyCode::Enter | KeyCode::Char('o') => state.enter(),
-            KeyCode::Char('d') => state.details = !state.details,
             KeyCode::Char('r') => send(&mut state, &requests, Request::Refresh, "Refreshing…"),
-            KeyCode::Char(c @ (' ' | 'y' | 'v' | '!' | 't' | 's' | '#')) => {
+            KeyCode::Char(c @ (' ' | 'y' | 'v' | '!' | '-' | 't' | 's' | '#')) => {
                 let ids = if state.checked.is_empty() {
                     state
                         .selected_task()
@@ -418,7 +554,7 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
                     let action = match c {
                         'y' => Action::Complete,
                         'v' => Action::Reopen,
-                        '!' => Action::Cancel,
+                        '!' | '-' => Action::Cancel,
                         't' => Action::Today,
                         's' => Action::Someday,
                         '#' => Action::Trash,
@@ -441,41 +577,43 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
         system.exit();
     }
     let state = model.read();
+    let palette = Palette::new(props.no_color);
     if let Some(calendar) = &state.calendar {
         return element! {
-            View(width: u32::from(width), height: u32::from(height), flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
-                Text(content: if calendar.field == Some(3) { "Choose deadline" } else { "Choose schedule date" }, weight: Weight::Bold)
-                Text(content: calendar.display())
-                Text(content: "Arrows / h j k l: day · PgUp/PgDn or [ ]: month · t: today")
-                Text(content: "Enter: apply · Esc / u: back")
-                Text(content: text(&state.message))
+            View(width: u32::from(width), height: u32::from(height), background_color: palette.background, flex_direction: FlexDirection::Column, overflow: Overflow::Hidden, padding: 1) {
+                Text(content: format!("{}  {}", icons.list(List::Upcoming), if calendar.field == Some(3) { "Choose deadline" } else { "Choose schedule date" }), color: palette.accent, weight: Weight::Bold)
+                View(border_style: BorderStyle::Round, border_color: palette.accent, background_color: palette.panel, padding: 1, width: 34) { Text(content: calendar.display(), color: palette.text) }
+                Text(content: "Arrows / h j k l: day · PgUp/PgDn or [ ]: month · t: today", color: palette.muted)
+                Text(content: "Enter: apply · Esc / u: back", color: palette.accent)
+                Text(content: text(&state.message), color: if state.message.starts_with("Error:") { palette.red } else { palette.muted })
             }
         };
     }
-    if let Some(editor) = &state.editor {
-        let (lines, cursor) = editor.lines(usize::from(width.saturating_sub(2)));
-        let count = usize::from(height.saturating_sub(4)).max(1);
+    if let Some(editor) = &state.editor
+        && !state.quick_create
+        && width < 100
+    {
+        let (lines, cursor) = editor.lines(usize::from(width.saturating_sub(4)), icons);
+        let count = usize::from(height.saturating_sub(5)).max(1);
         let start = cursor.saturating_sub(count.saturating_sub(1));
         return element! {
-            View(width: u32::from(width), height: u32::from(height), flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
-                Text(content: if editor.draft.original.is_some() { "Edit task" } else { "Create task" }, weight: Weight::Bold)
-                View(flex_grow: 1.0, min_height: 0, flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
+            View(width: u32::from(width), height: u32::from(height), background_color: palette.background, flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
+                Text(content: format!(" {} Details · {}", icons.field(0), if editor.editing { "EDIT" } else { "VIEW" }), color: palette.accent, weight: Weight::Bold)
+                View(flex_grow: 1.0, min_height: 0, padding_left: 1, padding_right: 1, flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
                     #(lines.into_iter().skip(start).take(count).map(|(line, focused)| element! {
-                        View(height: 1, flex_shrink: 0.0) { Text(content: line, weight: if focused { Weight::Bold } else { Weight::Normal }, wrap: TextWrap::NoWrap) }
+                        View(height: 1, flex_shrink: 0.0, background_color: if focused { palette.focus } else { palette.panel }) { Text(content: line, color: if focused { palette.accent } else { palette.text }, weight: if focused { Weight::Bold } else { Weight::Normal }, wrap: TextWrap::NoWrap) }
                     }))
                 }
-                Text(content: text(&state.message).replace('\n', " "), wrap: TextWrap::NoWrap)
-                Text(content: "Tab: field · Ctrl-S: save · Esc: discard · F4: calendar · Ctrl-N: add item · Ctrl-D: delete · F2: status", wrap: TextWrap::NoWrap)
+                Text(content: editor.hint(), color: palette.muted, wrap: TextWrap::NoWrap)
+                Text(content: text(&state.message).replace('\n', " "), color: if state.message.starts_with("Error:") { palette.red } else { palette.muted }, wrap: TextWrap::NoWrap)
+                Text(content: editor.footer(), color: palette.accent, wrap: TextWrap::NoWrap)
             }
         };
     }
     let wide = width >= 100;
+    let editing = state.editor.as_ref().filter(|_| !state.quick_create);
     let show_details = wide || state.details;
-    let accent = if props.no_color {
-        Color::Reset
-    } else {
-        Color::Cyan
-    };
+    let accent = palette.accent;
     let mode = if props.local {
         "LOCAL PREVIEW"
     } else if props.cached {
@@ -484,23 +622,40 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
         "THINGS CLOUD"
     };
     let heading = format!(
-        "things3  ·  {}  ·  {} items  ·  {mode}",
+        "  {}  THINGS  /  {}  ·  {} items  ·  {mode}",
+        icons.list(state.list),
         text(&state.title()),
         state.tasks.len()
     );
     let start = state.selected.saturating_sub(rows.saturating_sub(1));
-    let detail_lines = detail_lines(&state, width);
-    let scroll = state
-        .detail_scroll
-        .min(detail_lines.len().saturating_sub(rows));
-    let detail_text = detail_lines
-        .into_iter()
+    let (panel_lines, scroll) = if let Some(editor) = editing {
+        let (lines, cursor) = editor.lines(usize::from(width / 2 - 4), icons);
+        (lines, cursor.saturating_sub(rows.saturating_sub(2)))
+    } else {
+        let lines = detail_lines(&state, width, icons);
+        let scroll = state.detail_scroll.min(lines.len().saturating_sub(rows));
+        (
+            lines.into_iter().map(|line| (line, false)).collect(),
+            scroll,
+        )
+    };
+    let detail_text = panel_lines
+        .iter()
+        .map(|(line, _)| line.clone())
         .skip(scroll)
         .collect::<Vec<_>>()
         .join("\n");
-    let search = if !state.checked.is_empty() && !state.searching {
+    let search = if state.quick_create {
         format!(
-            "{} selected · y done · v reopen · ! cancel · t today · w date · s someday · # trash",
+            "{}  {}",
+            icons.field(0),
+            state.editor.as_ref().unwrap().draft.fields[0].display(true)
+        )
+    } else if let Some(editor) = editing {
+        editor.hint().into()
+    } else if !state.checked.is_empty() && !state.searching {
+        format!(
+            "{} selected · y done · v reopen · - cancel · t today · w date · s someday · # trash",
             state.checked.len()
         )
     } else if state.searching {
@@ -511,44 +666,50 @@ pub fn App(mut hooks: Hooks, props: &AppProps) -> impl Into<AnyElement<'static>>
         format!("Filter: {}  (Esc to clear)", text(&state.query))
     };
     element! {
-        View(width: u32::from(width), height: u32::from(height), flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
-            View(height: 1, flex_shrink: 0.0) { Text(content: heading, color: accent, weight: Weight::Bold, wrap: TextWrap::NoWrap) }
-            View(height: 1, flex_shrink: 0.0) { Text(content: search, wrap: TextWrap::NoWrap) }
+        View(width: u32::from(width), height: u32::from(height), background_color: palette.background, flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
+            View(height: 1, flex_shrink: 0.0, background_color: palette.focus) { Text(content: heading, color: accent, weight: Weight::Bold, wrap: TextWrap::NoWrap) }
+            View(height: 1, flex_shrink: 0.0, padding_left: 1, background_color: if state.quick_create { palette.focus } else { None }) { Text(content: search, color: if state.quick_create || !state.checked.is_empty() { palette.accent } else { palette.muted }, wrap: TextWrap::NoWrap) }
             View(flex_grow: 1.0, min_height: 0, overflow: Overflow::Hidden) {
                 #(if width >= 60 { Some(element! {
-                    View(width: 17, flex_shrink: 0.0, flex_direction: FlexDirection::Column, padding_top: 1) {
+                    View(width: 17, flex_shrink: 0.0, flex_direction: FlexDirection::Column, padding_top: 1, background_color: palette.panel) {
                         #(List::ALL.into_iter().enumerate().map(|(i, list)| element! {
-                            Text(content: format!("{} {} {}", if state.list == list { ">" } else { " " }, i + 1, list.title()), color: if state.list == list { accent } else { Color::Reset })
+                            View(height: 2, flex_shrink: 0.0, background_color: if state.list == list { palette.focus } else { palette.panel }) {
+                                Text(content: format!(" {} {} {} {}", if state.list == list { "▎" } else { " " }, icons.list(list), i + 1, list.title()), color: if state.list == list { accent } else { palette.muted }, weight: if state.list == list { Weight::Bold } else { Weight::Normal })
+                            }
                         }))
                     }
                 }) } else { None })
-                View(flex_grow: 1.0, min_width: 0, border_style: BorderStyle::Round, flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
-                    #(if state.help { Some(element! { Text(content: format!("w: calendar · t: today · Editor F4: calendar\n{HELP}")) }) } else { None })
+                View(flex_grow: 1.0, min_width: 0, border_style: BorderStyle::Round, border_color: palette.border, background_color: palette.panel, flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
+                    #(if state.help { Some(element! { Text(content: HELP, color: palette.text) }) } else { None })
                     #(if !state.help && (!show_details || wide) { Some(element! {
                         View(flex_direction: FlexDirection::Column, flex_grow: 1.0, overflow: Overflow::Hidden) {
-                            #(if state.tasks.is_empty() { Some(element! { Text(content: if state.busy { "Loading…" } else { "No tasks in this view." }) }) } else { None })
+                            #(if state.tasks.is_empty() { Some(element! { Text(content: if state.busy { "  Loading your tasks…" } else { "  All clear. Press c to create a task." }, color: palette.muted) }) } else { None })
                             #(state.tasks.iter().enumerate().skip(start).take(rows).map(|(index, task)| {
                                 let selected = index == state.selected;
                                 let checked = state.checked.contains(&task.uuid);
                                 element! {
-                                    View(height: 1, flex_shrink: 0.0, background_color: if checked && !props.no_color { Some(Color::DarkBlue) } else { None }) {
-                                        Text(content: format!("{} {} {}", if selected { ">" } else { " " }, status_icon(task), text(&task.title).replace('\n', " ")),
-                                            color: if checked && !props.no_color { Color::White } else if selected { accent } else { Color::Reset }, weight: if selected || checked { Weight::Bold } else { Weight::Normal }, wrap: TextWrap::NoWrap)
+                                    View(height: 1, flex_shrink: 0.0, background_color: if checked { palette.selection } else if selected { palette.focus } else { palette.panel }) {
+                                        Text(content: format!("{} {} {}", if selected { "▎" } else { " " }, icons.task(task), text(&task.title).replace('\n', " ")),
+                                            color: if checked { palette.text } else if selected { accent } else if task.status == TaskStatus::Completed { palette.green } else if task.status == TaskStatus::Canceled { palette.muted } else { palette.text }, weight: if selected || checked { Weight::Bold } else { Weight::Normal }, wrap: TextWrap::NoWrap)
                                     }
                                 }
                             }))
                         }
                     }) } else { None })
-                    #(if !state.help && show_details && !wide { Some(element! { Text(content: detail_text.clone()) }) } else { None })
+                    #(if !state.help && show_details && !wide { Some(element! { Text(content: detail_text.clone(), color: palette.text) }) } else { None })
                 }
                 #(if wide && !state.help { Some(element! {
-                    View(width: u32::from(width / 2), flex_shrink: 0.0, border_style: BorderStyle::Round, padding_left: 1, padding_right: 1, overflow: Overflow::Hidden) {
-                        Text(content: detail_text)
+                    View(width: u32::from(width / 2), flex_shrink: 0.0, border_style: BorderStyle::Round, border_color: if editing.is_some() { palette.accent } else { palette.border }, background_color: palette.panel, padding_left: 1, padding_right: 1, flex_direction: FlexDirection::Column, overflow: Overflow::Hidden) {
+                        #(panel_lines.iter().skip(scroll).take(rows).map(|(line, focused)| element! {
+                            View(height: 1, flex_shrink: 0.0, background_color: if *focused { palette.focus } else { palette.panel }) {
+                                Text(content: line.clone(), color: if *focused { palette.accent } else { palette.text }, weight: if *focused { Weight::Bold } else { Weight::Normal }, wrap: TextWrap::NoWrap)
+                            }
+                        }))
                     }
                 }) } else { None })
             }
-            View(height: 1, flex_shrink: 0.0) { Text(content: text(&state.message).replace('\n', " "), wrap: TextWrap::NoWrap) }
-            View(height: 1, flex_shrink: 0.0) { Text(content: "c create · e edit · x select · o open · u back · t today · w date · ? help · q quit", wrap: TextWrap::NoWrap) }
+            View(height: 1, flex_shrink: 0.0, padding_left: 1) { Text(content: text(&state.message).replace('\n', " "), color: if state.message.starts_with("Error:") { palette.red } else if state.busy { palette.accent } else { palette.green }, wrap: TextWrap::NoWrap) }
+            View(height: 1, flex_shrink: 0.0, background_color: palette.focus, padding_left: 1) { Text(content: if state.quick_create { "Enter  create     Esc  cancel     Then e for details" } else if let Some(editor) = editing { editor.footer() } else { "c create · e edit · x select · o details · u back · t today · w date · ? help · q quit" }, color: palette.muted, wrap: TextWrap::NoWrap) }
         }
     }
 }

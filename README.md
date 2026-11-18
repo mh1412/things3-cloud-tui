@@ -74,6 +74,26 @@ If you also have another `things3` installed, use `command -v things3` to check
 which executable your shell resolves. You can launch this installation directly
 with `~/.cargo/bin/things3 tui` when using Cargo's default installation directory.
 
+### Terminal font
+
+**The default TUI icon mode requires a [Nerd Font](https://www.nerdfonts.com/).**
+Install a patched font such as FantasqueSansM Nerd Font or JetBrainsMono Nerd
+Font, then select it in your terminal application's profile settings. Installing
+the font alone does not change the terminal's active font.
+
+For example, in iTerm2, open **Settings → Profiles → Text → Font** and choose
+the Nerd Font. Missing or incorrect fonts can display icons as boxes or cause
+alignment issues.
+
+If you prefer not to install a Nerd Font, use plain-text icons:
+
+```bash
+things3 tui --icons plain
+```
+
+Or use `things3 tui --icons emoji` with a terminal/font that supports emoji.
+The demo uses **FantasqueSansM Nerd Font**.
+
 ### Launch
 
 ```bash

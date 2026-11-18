@@ -1,17 +1,31 @@
-# things3-cloud
+# things3-cloud-tui
 
 [![Main](https://github.com/evanpurkhiser/things3-cloud/actions/workflows/main.yml/badge.svg)](https://github.com/evanpurkhiser/things3-cloud/actions/workflows/main.yml)
 
 A Rust command-line client for [Things 3](https://culturedcode.com/things/)
 that talks directly to the Things Cloud API.
 
+This project is a TUI-focused fork of
+[evanpurkhiser/things3-cloud](https://github.com/evanpurkhiser/things3-cloud),
+created by [Evan Purkhiser](https://github.com/evanpurkhiser). The original
+project provides the foundation: the Rust CLI, Things Cloud client, sync and
+cache infrastructure, and task-management commands. This fork builds on that
+work with an interactive terminal interface, keyboard-driven editing,
+autosave, and batch actions.
+
+Thanks to Evan and the upstream contributors for making this project possible.
+The original [MIT license](LICENSE) and copyright notice are retained.
+
 Protocol reference: [Things Cloud API documentation](doc/README.md).
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/demo-dark.gif">
-  <source media="(prefers-color-scheme: light)" srcset=".github/assets/demo-light.gif">
-  <img src=".github/assets/demo-light.gif" alt="Demo of the things3 command-line interface">
-</picture>
+## TUI demo
+
+Browse Inbox and Today, view and edit task details, and schedule tasks with
+the calendar picker. Recorded with synthetic tasks in local-preview mode.
+
+<img src=".github/assets/things3-tui.gif" width="720" alt="Things3 TUI demo: Inbox and Today, detail view and editing, and calendar date selection">
+
+[Watch or download the MP4](.github/assets/things3-tui.mp4).
 
 ```bash
 things3 find --query "rent" --deadline "<=2026-03-31"

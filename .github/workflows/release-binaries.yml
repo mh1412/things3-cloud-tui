@@ -32,7 +32,7 @@ jobs:
       matrix:
         include:
           - platform: macos-arm64
-            runner: macos-15
+            runner: macos-14
             target: aarch64-apple-darwin
           - platform: macos-amd64
             runner: macos-15-intel
@@ -51,6 +51,19 @@ jobs:
 
       - name: Install Rust toolchain
         run: rustup toolchain install 1.93.1 --profile minimal
+
+      # jq <= 1.6 drops trailing .0 in the CLI payload snapshots.
+      - name: Install deterministic JSON formatter
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          asset="jq-$PLATFORM"
+          mkdir -p "$RUNNER_TEMP/jq-bin"
+          curl --fail --location --retry 3 "https://github.com/jqlang/jq/releases/download/jq-1.7.1/$asset" -o "$RUNNER_TEMP/jq-bin/jq"
+          chmod +x "$RUNNER_TEMP/jq-bin/jq"
+          "$RUNNER_TEMP/jq-bin/jq" --version
+          test "$(printf '1700000111.0' | "$RUNNER_TEMP/jq-bin/jq" .)" = '1700000111.0'
+          echo "$RUNNER_TEMP/jq-bin" >> "$GITHUB_PATH"
 
       - name: Test
         run: cargo +1.93.1 test --locked --all-targets

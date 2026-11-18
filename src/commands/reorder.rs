@@ -45,6 +45,78 @@ fn build_reorder_plan(
     today_ts: i64,
     initial_ancestor_index: Option<i64>,
 ) -> std::result::Result<ReorderPlan, String> {
+    build_reorder_plan_for_order(args, store, now, today_ts, initial_ancestor_index, None)
+}
+
+pub(crate) fn reorder_changes(
+    args: &ReorderArgs,
+    store: &crate::store::ThingsStore,
+    now: f64,
+    today_ts: i64,
+    today_order: bool,
+) -> Result<BTreeMap<String, WireObject>> {
+    if today_order {
+        let today = Utc
+            .timestamp_opt(today_ts, 0)
+            .single()
+            .ok_or_else(|| anyhow::anyhow!("Invalid date"))?;
+        let mut order = store.today(&today);
+        let index = order
+            .iter()
+            .position(|task| task.uuid.to_string() == args.item_id)
+            .ok_or_else(|| anyhow::anyhow!("Task is no longer in Today"))?;
+        let task = order.remove(index);
+        let anchor = args
+            .before_id
+            .as_ref()
+            .or(args.after_id.as_ref())
+            .ok_or_else(|| anyhow::anyhow!("Missing anchor"))?;
+        let index = order
+            .iter()
+            .position(|task| task.uuid.to_string() == *anchor)
+            .ok_or_else(|| anyhow::anyhow!("Anchor is no longer in Today"))?;
+        order.insert(index + usize::from(args.after_id.is_some()), task);
+        let mut changes = BTreeMap::new();
+        for (index, task) in order.iter().enumerate() {
+            anyhow::ensure!(
+                task.entity.can_upgrade_to_task7(),
+                "Unsupported task entity for reordering"
+            );
+            let sort_index = i32::try_from(order.len() - index)?;
+            if task.today_index != sort_index {
+                changes.insert(
+                    task.uuid.to_string(),
+                    WireObject::update(
+                        EntityType::Task7,
+                        TaskPatch {
+                            today_sort_index: Some(sort_index),
+                            today_index_reference: Some(Some(today_ts)),
+                            modification_date: Some(Some(now)),
+                            ..Default::default()
+                        },
+                    ),
+                );
+            }
+        }
+        return Ok(changes);
+    }
+    let plan = build_reorder_plan_for_order(args, store, now, today_ts, None, Some(today_order))
+        .map_err(anyhow::Error::msg)?;
+    Ok(plan
+        .commits
+        .into_iter()
+        .flat_map(|commit| commit.changes)
+        .collect())
+}
+
+fn build_reorder_plan_for_order(
+    args: &ReorderArgs,
+    store: &crate::store::ThingsStore,
+    now: f64,
+    today_ts: i64,
+    initial_ancestor_index: Option<i64>,
+    today_order: Option<bool>,
+) -> std::result::Result<ReorderPlan, String> {
     let today = Utc
         .timestamp_opt(today_ts, 0)
         .single()
@@ -88,7 +160,8 @@ fn build_reorder_plan(
     let is_today_orderable = |task: &crate::store::Task| {
         task.start == TaskStart::Anytime && (task.is_today(&today) || task.evening)
     };
-    let is_today_reorder = is_today_orderable(&item) && is_today_orderable(&anchor);
+    let is_today_reorder =
+        today_order.unwrap_or(true) && is_today_orderable(&item) && is_today_orderable(&anchor);
 
     if is_today_reorder {
         let anchor_tir = anchor

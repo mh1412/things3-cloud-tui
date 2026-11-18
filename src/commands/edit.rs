@@ -101,9 +101,9 @@ fn resolve_checklist_items(
 }
 
 #[derive(Debug, Clone)]
-struct EditPlan {
+pub(crate) struct EditPlan {
     tasks: Vec<crate::store::Task>,
-    changes: BTreeMap<String, WireObject>,
+    pub(crate) changes: BTreeMap<String, WireObject>,
     labels: Vec<String>,
 }
 
@@ -156,7 +156,7 @@ impl Command for EditArgs {
     }
 }
 
-fn build_edit_plan(
+pub(crate) fn build_edit_plan(
     args: &EditArgs,
     store: &crate::store::ThingsStore,
     now: f64,

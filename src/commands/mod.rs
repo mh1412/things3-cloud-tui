@@ -17,6 +17,7 @@ pub mod set_auth;
 pub mod someday;
 pub mod tags;
 pub mod today;
+pub mod tui;
 pub mod upcoming;
 pub mod webserver;
 
@@ -121,6 +122,8 @@ pub enum Commands {
     SetAuth(set_auth::SetAuthArgs),
     #[command(about = "Search and filter tasks")]
     Find(find::FindArgs),
+    #[command(about = "Open the interactive terminal interface")]
+    Tui(tui::TuiArgs),
     #[command(hide = true, about = "Generate shell completion scripts")]
     Completions(completions::CompletionsArgs),
     #[command(hide = true, about = "Run internal HTTP bridge server")]
@@ -154,6 +157,7 @@ impl Command for Commands {
             Commands::Delete(args) => args.run_with_ctx(cli, out, ctx),
             Commands::SetAuth(args) => args.run_with_ctx(cli, out, ctx),
             Commands::Find(args) => args.run_with_ctx(cli, out, ctx),
+            Commands::Tui(args) => args.run_with_ctx(cli, out, ctx),
             Commands::Completions(args) => args.run_with_ctx(cli, out, ctx),
             Commands::Webserver(args) => args.run_with_ctx(cli, out, ctx),
         }

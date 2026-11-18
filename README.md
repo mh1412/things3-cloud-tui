@@ -59,6 +59,73 @@ export THINGS3_PASSWORD="your-password"
 
 Environment variables override values in the auth file.
 
+## Interactive mode
+
+```bash
+things3 tui
+things3 tui --view inbox
+things3 --no-sync tui
+```
+
+Browse Inbox, Today, Upcoming, Anytime, Someday, Logbook, and Projects.
+Wide terminals show task details alongside the list; on smaller terminals,
+press `Enter` or `d` to see notes, dates, tags, and checklists.
+
+| Key | Action |
+| --- | --- |
+| `1`–`7`, `Tab`, `←` / `→` | Switch lists |
+| `j` / `k`, `↓` / `↑` | Move the cursor |
+| `c` / `e` | Create / edit a task |
+| `x` | Toggle selection of the cursor task |
+| `* a` / `* n` | Select all visible tasks / clear selection |
+| `y` / `v` / `!` | Complete / reopen / cancel |
+| `t` / `s` / `#` | Schedule today / someday / trash |
+| `w` | Open calendar to schedule selected tasks (or the focused task) |
+| `g i`, `g t`, `g a`, `g s`, `g l`, `g p` | Jump to Inbox, Today, Anytime, Someday, Logbook, Projects |
+| `Home` / `End`, `PgUp` / `PgDn` | Jump through the list |
+| `o` / `Enter` | Open a project or toggle task details |
+| `/` | Search the current list, including notes and checklists |
+| `Enter` / `Esc` while searching | Keep / clear the filter |
+| `Space` | Complete or reopen the selected task |
+| `Shift-J` / `Shift-K` | Move the focused task down / up |
+| `Ctrl-D` / `Ctrl-U` | Scroll task details down / up |
+| `u` / `Esc` | Clear the filter or go back |
+| `r` | Refresh |
+| `?` | Show help |
+| `q` / `Ctrl-C` | Quit |
+
+Cloud operations run in a background worker. Status changes use the same
+validation as `mark`, and are shown as saved only after a successful commit.
+As with other commands, `--no-sync` skips cloud reads but still permits writes.
+
+Actions apply to selected tasks, or the cursor task when nothing is selected.
+Each batch is validated in full and submitted in one commit. Changing lists
+clears the selection.
+
+Selected rows are highlighted. Reordering applies to the focused task within
+its container; Upcoming preserves date groups and Logbook stays date-ordered.
+
+The task editor includes title, multiline notes, schedule, deadline, tags,
+project/area location, and checklist titles and statuses. Use `Tab`/`Shift-Tab`
+to switch fields, `Ctrl-U` to clear a field, `Ctrl-S` to save, and `Esc` to
+discard. In notes, `Enter` inserts a newline. `Ctrl-N` adds a checklist item,
+`Ctrl-D` removes the focused item, and `F2` cycles its status. Failed saves
+keep the draft open. Project metadata editing is not included.
+
+In the calendar, arrows (or `h/j/k/l`) move by day/week, `PgUp`/`PgDn`
+(or `[`/`]`) change months, and `t` jumps to Today. `Enter` applies the
+date; `Esc`/`u` goes back. In the editor, `F4` opens the calendar for the
+deadline when that field is focused, otherwise for the schedule field.
+
+To try the interface with sample data from a source checkout:
+
+```bash
+cargo run -- --load-journal tests/fixtures/tui.json tui --view inbox
+```
+
+A loaded journal (or `--no-cloud`) enables **local preview**: status changes
+stay in memory, and `r` reloads the original fixture/cache.
+
 ## Supported features
 
 Roadmap items are tracked in [`ROADMAP.md`](ROADMAP.md).
@@ -75,6 +142,7 @@ Roadmap items are tracked in [`ROADMAP.md`](ROADMAP.md).
 - [x] Show checklist items via `--detailed`
 - [x] `find` with title/notes/checklists
       and tag/area/project/status/date filters
+- [x] `tui` — interactive lists, search, details, and completion toggles
 
 ### Tasks
 

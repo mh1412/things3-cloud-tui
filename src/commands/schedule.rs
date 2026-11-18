@@ -31,13 +31,13 @@ pub struct ScheduleArgs {
 }
 
 #[derive(Debug, Clone)]
-struct SchedulePlan {
+pub(crate) struct SchedulePlan {
     task: crate::store::Task,
-    update: TaskPatch,
+    pub(crate) update: TaskPatch,
     labels: Vec<String>,
 }
 
-fn build_schedule_plan(
+pub(crate) fn build_schedule_plan(
     args: &ScheduleArgs,
     store: &crate::store::ThingsStore,
     now: f64,

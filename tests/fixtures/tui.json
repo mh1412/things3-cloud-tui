@@ -1,0 +1,37 @@
+[
+  {
+    "A7h5eCi24RvAWKC3Hv3muf": {
+      "t": 0,
+      "e": "Task7",
+      "p": {
+        "tt": "Explore the terminal interface",
+        "nt": "Press / to search. Use Tab to switch lists.\nSpace completes a task; reopen it from Logbook.\n\nUnicode notes: café, 你好, 日本語.\nThis deliberately long line demonstrates that notes wrap to the available width and remain accessible with the detail-scrolling shortcuts J and K, even when the terminal is narrow.",
+        "tp": 0,
+        "ss": 0,
+        "st": 0,
+        "cd": 1794960000,
+        "ix": 0
+      }
+    },
+    "KGvAPpMrzHAKMdgMiERP1V": {
+      "t": 0,
+      "e": "Task7",
+      "p": {"tt": "Plan the week", "tp": 0, "ss": 0, "st": 0, "cd": 1794960000, "ix": 1}
+    },
+    "MpkEei6ybkFS2n6SXvwfLf": {
+      "t": 0,
+      "e": "Task7",
+      "p": {"tt": "Weekend project", "tp": 1, "ss": 0, "st": 1, "cd": 1794960000, "ix": 2}
+    },
+    "Q9sihFX2SsvGaz6vv4J2Hf": {
+      "t": 0,
+      "e": "Task7",
+      "p": {"tt": "Sketch a first draft", "tp": 0, "ss": 0, "st": 1, "pr": ["MpkEei6ybkFS2n6SXvwfLf"], "cd": 1794960000, "ix": 3}
+    },
+    "BVU8qZ9dNjrdxLvDHPvfDS": {
+      "t": 0,
+      "e": "ChecklistItem3",
+      "p": {"tt": "Try searching for checklist text", "ss": 0, "ts": ["A7h5eCi24RvAWKC3Hv3muf"], "ix": 0}
+    }
+  }
+]

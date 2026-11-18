@@ -187,6 +187,42 @@ struct MarkCommitPlan {
     changes: BTreeMap<String, WireObject>,
 }
 
+/// Build a single status change without printing, for interactive callers.
+/// Keep the same entity and recurrence checks as the `mark` command.
+pub(crate) fn status_change(
+    store: &crate::store::ThingsStore,
+    id: &str,
+    status: TaskStatus,
+    now: f64,
+) -> Result<BTreeMap<String, WireObject>> {
+    let (task, error, _) = store.resolve_mark_identifier(id);
+    let task = task.ok_or_else(|| anyhow::anyhow!(error))?;
+    let action = match status {
+        TaskStatus::Completed => "done",
+        TaskStatus::Incomplete => "incomplete",
+        TaskStatus::Canceled => "canceled",
+        _ => anyhow::bail!("Unsupported task status"),
+    };
+    let error = validate_mark_target(&task, action, store);
+    anyhow::ensure!(error.is_empty(), "{error}");
+    Ok(BTreeMap::from([(
+        task.uuid.to_string(),
+        WireObject::update(
+            EntityType::Task7,
+            TaskPatch {
+                status: Some(status),
+                stop_date: Some(if status == TaskStatus::Incomplete {
+                    None
+                } else {
+                    Some(now)
+                }),
+                modification_date: Some(Some(now)),
+                ..Default::default()
+            },
+        ),
+    )]))
+}
+
 fn build_mark_status_plan(
     args: &MarkArgs,
     store: &crate::store::ThingsStore,

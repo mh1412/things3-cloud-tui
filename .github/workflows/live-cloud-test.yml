@@ -11,6 +11,8 @@ permissions:
 jobs:
   live_cloud_test:
     name: Live cloud test
+    # Enable push runs only after configuring a dedicated test account.
+    if: github.event_name == 'workflow_dispatch' || vars.THINGS3_LIVE_TEST_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:

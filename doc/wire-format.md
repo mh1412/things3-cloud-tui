@@ -1,7 +1,8 @@
 # Wire format and entities
 
-Source of truth: [`src/wire/`](../src/wire/). These are the fields and behaviors
-modeled by this repository, not a complete server schema.
+Source of truth: [`src/wire/`](../src/wire/).
+These are the fields and behaviors modeled by this repository,
+not a complete server schema.
 
 ## Envelope and operations
 
@@ -22,12 +23,16 @@ modeled by this repository, not a complete server schema.
 | `e` | Versioned entity name |
 | `p` | Properties for the operation |
 
-History folding applies records in order. Create replaces state for that ID;
-update merges specified fields; delete removes the object. Missing patch fields
-mean unchanged. Explicit `null` clears supported nullable fields, and `[]`
-clears a relationship list. Do not serialize absent patch fields as null.
-Unknown operation values and entity names are represented explicitly in the
-Rust types; that does not make unknown entities safe to mutate.
+History folding applies records in order.
+Create replaces state for that ID; update merges specified fields;
+delete removes the object.
+Missing patch fields mean unchanged.
+Explicit `null` clears supported nullable fields,
+and `[]` clears a relationship list.
+Do not serialize absent patch fields as null.
+Unknown operation values
+and entity names are represented explicitly in the Rust types;
+that does not make unknown entities safe to mutate.
 
 ## IDs
 
@@ -37,22 +42,24 @@ Modern entity IDs are Base58 representations of 16 bytes using:
 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
 ```
 
-The parser accepts modern IDs, legacy hyphenated UUIDs, and historical
-`ACTIONGROUP-<UUID>` heading IDs. Legacy UUID canonicalization is:
+The parser accepts modern IDs, legacy hyphenated UUIDs,
+and historical `ACTIONGROUP-<UUID>` heading IDs.
+Legacy UUID canonicalization is:
 
 1. Remove the heading discriminator if present.
 2. Normalize the UUID to uppercase hyphenated text.
 3. SHA-1 hash that text and take the first 16 bytes.
 4. Base58 encode those bytes.
 
-This is **not** simply Base58 of the original UUID bytes. New IDs are generated
-through `ThingsId::random()`. Normalize both object keys and relationships
-consistently. Historical default-tag identifiers required additional handling
-in the recovery script; the general `ThingsId` parser does not accept arbitrary
-legacy tag strings.
+This is **not** simply Base58 of the original UUID bytes.
+New IDs are generated through `ThingsId::random()`.
+Normalize both object keys and relationships consistently.
+Historical default-tag identifiers required additional handling in the recovery
+script; the general `ThingsId` parser does not accept arbitrary legacy tag
+strings.
 
-History keys and app-instance IDs are separate identifier classes. Do not
-convert them using entity-ID canonicalization.
+History keys and app-instance IDs are separate identifier classes.
+Do not convert them using entity-ID canonicalization.
 
 ## Entity versions
 
@@ -66,8 +73,9 @@ convert them using entity-ID canonicalization.
 | Tombstones | `Tombstone`, `Tombstone2` | Deletion metadata |
 | Commands | `Command` | One-shot commands, semantics incomplete |
 
-Do not reclassify a legacy entity by changing only `e`. An unsupported entity
-may be readable while still being unsafe to update through modern schemas.
+Do not reclassify a legacy entity by changing only `e`.
+An unsupported entity may be readable
+while still being unsafe to update through modern schemas.
 
 ## Task properties
 
@@ -108,22 +116,25 @@ may be readable while still being unsafe to update through modern schemas.
 | `cd` | number or null | Creation timestamp |
 | `md` | number or null | Last user modification timestamp |
 
-Timestamps are Unix seconds, not milliseconds. Day fields and timezone
-conversion deserve special care: `parse_day` currently builds local midnight
-using the current fixed local offset, while `today_utc` supplies the CLI's Today
-reference. Do not assume UTC midnight and local midnight are interchangeable,
+Timestamps are Unix seconds, not milliseconds.
+Day fields and timezone conversion deserve special care:
+`parse_day` currently builds local midnight using the current fixed local
+offset, while `today_utc` supplies the CLI's Today reference.
+Do not assume UTC midnight and local midnight are interchangeable,
 or that this implementation completely specifies Things' DST behavior.
 
-Read support is broader than write support. `TaskPatch` exposes `tt`, `nt`,
-`st`, `sr`, `tir`, `pr`, `ar`, `agr`, `tg`, `sb`, `tp`, `ss`, `sp`, `dd`, `ix`,
-`ti`, `rr`, `rp`, `rt`, `icsd`, `acrd`, `icc`, `icp`, `lt`, `tr`, `cd`, and `md`.
+Read support is broader than write support.
+`TaskPatch` exposes `tt`, `nt`, `st`, `sr`, `tir`, `pr`, `ar`, `agr`, `tg`,
+`sb`, `tp`, `ss`, `sp`, `dd`, `ix`, `ti`, `rr`, `rp`, `rt`, `icsd`, `acrd`,
+`icc`, `icp`, `lt`, `tr`, `cd`, and `md`.
 Other read properties are not generally writable through current commands.
 
 ### Common mutation recipes
 
-All recipes are sparse `Task7` updates unless stated otherwise. Set `md` to
-the edit timestamp. Full creation payloads should come from
-[`new.rs`](../src/commands/new.rs), which initializes defaults and ordering.
+All recipes are sparse `Task7` updates unless stated otherwise.
+Set `md` to the edit timestamp.
+Full creation payloads should come from [`new.rs`](../src/commands/new.rs),
+which initializes defaults and ordering.
 
 | Action | Main property changes |
 | --- | --- |
@@ -142,26 +153,31 @@ the edit timestamp. Full creation payloads should come from
 
 Moving to Inbox also clears incompatible location/scheduling relationships;
 use the move planner in [`edit.rs`](../src/commands/edit.rs), not just `st=0`.
-Projects and headings use task records and relationships rather than separate
-HTTP resources. Headings must not be created as Inbox items. Tasks assigned
-to projects/areas normally use `st=1` after being triaged.
+Projects and headings use task records
+and relationships rather than separate HTTP resources.
+Headings must not be created as Inbox items.
+Tasks assigned to projects/areas normally use `st=1` after being triaged.
 
-The CLI's Today view sorts nonzero `ti` in descending order; structural views
-use container ordering and other view-specific keys. Do not infer that an
-increase of `ix` or `ti` has the same effect in every list. See
-[`store/mod.rs`](../src/store/mod.rs) and [`reorder.rs`](../src/commands/reorder.rs).
+The CLI's Today view sorts nonzero `ti` in descending order;
+structural views use container ordering and other view-specific keys.
+Do not infer that an increase of `ix` or `ti` has the same effect in every list.
+See [`store/mod.rs`](../src/store/mod.rs)
+and [`reorder.rs`](../src/commands/reorder.rs).
 
 ## Notes
 
-The reader accepts legacy strings and structured text. Current full-text writes:
+The reader accepts legacy strings and structured text.
+Current full-text writes:
 
 ```json
 {"_t":"tx","t":1,"ch":0,"v":""}
 ```
 
-`ch` is unsigned CRC32 of the UTF-8 bytes of `v`; zero is correct for the empty
-string only. Use [`task6_note`](../src/common.rs) for populated notes. The
-function's historical name does not mean the task should be written as Task6.
+`ch` is unsigned CRC32 of the UTF-8 bytes of `v`;
+zero is correct for the empty string only.
+Use [`task6_note`](../src/common.rs) for populated notes.
+The function's historical name does not mean the task should be written
+as Task6.
 
 Delta notes use `t=2` and an ordered `ps` array:
 
@@ -170,15 +186,18 @@ Delta notes use `t=2` and an ordered `ps` array:
 ```
 
 For each patch, `p` is a **UTF-8 byte offset**, `l` is the byte length removed,
-and `r` is replacement text. Optional patch `ch` checks the resulting entire
-text after that patch. Apply sequentially, validate bounds and UTF-8, and
-verify checksums when supplied. Do not interpret offsets as Unicode character
-counts. Unknown notes formats cannot safely be treated as empty strings.
+and `r` is replacement text.
+Optional patch `ch` checks the resulting entire text after that patch.
+Apply sequentially, validate bounds and UTF-8,
+and verify checksums when supplied.
+Do not interpret offsets as Unicode character counts.
+Unknown notes formats cannot safely be treated as empty strings.
 
-The current reader validates patch checksums, but a full-text `t=1` read takes
-`v` without validating its top-level checksum. Recovery tooling performed
-additional checks. Empty rendered notes become `None` in the materialized
-store; explicitly writing an empty structured object is still meaningful.
+The current reader validates patch checksums,
+but a full-text `t=1` read takes `v` without validating its top-level checksum.
+Recovery tooling performed additional checks.
+Empty rendered notes become `None` in the materialized store;
+explicitly writing an empty structured object is still meaningful.
 
 ## ChecklistItem3
 
@@ -193,9 +212,10 @@ store; explicitly writing an empty structured object is still meaningful.
 | `lt` | boolean | Tombstone behavior |
 | `xx` | opaque JSON | Conflict metadata |
 
-Checklist items are independent entities, not embedded task arrays. Rename and
-status changes use `t=1`; removal uses `t=2`. Patch fields currently cover all
-listed fields except `lt` and `xx`. Reopening clears `sp` with null.
+Checklist items are independent entities, not embedded task arrays.
+Rename and status changes use `t=1`; removal uses `t=2`.
+Patch fields currently cover all listed fields except `lt` and `xx`.
+Reopening clears `sp` with null.
 
 ## Area3 and Tag4
 
@@ -204,8 +224,8 @@ listed fields except `lt` and `xx`. Reopening clears `sp` with null.
 | Area3 | `tt` title, `tg` tag IDs, `ix` order, `xx` metadata | `tt`, `tg`, `ix`, `md` |
 | Tag4 | `tt` title, `sh` shortcut or null, `pn` parent-tag IDs, `ix` order, `xx` metadata | `tt`, `sh`, `pn`, `ix`, `md` |
 
-Use `pn: []` to remove tag parents and `sh: null` to clear a shortcut. Empty
-relationship arrays differ from omitted relationships.
+Use `pn: []` to remove tag parents and `sh: null` to clear a shortcut.
+Empty relationship arrays differ from omitted relationships.
 
 ## Recurrence, settings, tombstones, and commands
 
@@ -225,15 +245,20 @@ Legacy `rr` fields:
 | `rrv` | Rule version |
 
 See [`recurrence.rs`](../src/wire/recurrence.rs) for supported offset parsing.
-Task7 `rp` remains opaque. Recurrence changes may require template/instance
-bookkeeping; ordinary status changes are not a substitute. The CLI rejects
-several repeater mutations rather than claiming complete recurrence support.
+Task7 `rp` remains opaque.
+Recurrence changes may require template/instance bookkeeping;
+ordinary status changes are not a substitute.
+The CLI rejects several repeater mutations rather than claiming complete
+recurrence support.
 
-`Tombstone2` properties are `dloid` (deleted entity ID) and `dld` (deletion
-timestamp). A tombstone record, hard-delete operation, and task trash flag are
-different concepts.
+`Tombstone2` properties are `dloid` (deleted entity ID) and `dld`
+(deletion timestamp).
+A tombstone record, hard-delete operation,
+and task trash flag are different concepts.
 
 `Command` models `tp` (integer command type), `cd` (creation date), and `if`
-(initial-field object). Individual command-type meanings are not established
-here. Settings3/4/5 properties are not documented as an editable API. Preserve
-these records when archiving history instead of inventing replacement settings.
+(initial-field object).
+Individual command-type meanings are not established here.
+Settings3/4/5 properties are not documented as an editable API.
+Preserve these records when archiving history instead of inventing replacement
+settings.

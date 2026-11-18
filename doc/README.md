@@ -3,7 +3,8 @@
 Last reviewed: 2026-11-18.
 
 This directory records the reverse-engineered Things Cloud protocol known to
-this project. It is not an official Cultured Code specification or a claim
+this project.
+It is not an official Cultured Code specification or a claim
 that every server endpoint has been discovered.
 
 - [HTTP endpoints](endpoints.md): authentication, accounts, histories, commits,
@@ -41,9 +42,10 @@ The local implementation is the primary reference:
 Additional endpoints come from
 [`pkwagner/things-cloud-sdk` at `ffa72e9d0479`](https://github.com/pkwagner/things-cloud-sdk/tree/ffa72e9d0479),
 specifically `account.go`, `verify.go`, `histories.go`, `items.go`,
-`app_instance.go`, and `client.go`. References to SDK behavior in these docs
-mean that revision, not an assertion about the latest SDK.
+`app_instance.go`, and `client.go`.
+References to SDK behavior in these docs mean that revision,
+not an assertion about the latest SDK.
 
 Local recovery evidence is retained outside this repository in the sibling
-backup and restore directories. This reference summarizes the findings without
-copying those private artifacts.
+backup and restore directories.
+This reference summarizes the findings without copying those private artifacts.

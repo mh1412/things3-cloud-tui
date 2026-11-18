@@ -7,11 +7,11 @@ that talks directly to the Things Cloud API.
 
 This project is a TUI-focused fork of
 [evanpurkhiser/things3-cloud](https://github.com/evanpurkhiser/things3-cloud),
-created by [Evan Purkhiser](https://github.com/evanpurkhiser). The original
-project provides the foundation: the Rust CLI, Things Cloud client, sync and
-cache infrastructure, and task-management commands. This fork builds on that
-work with an interactive terminal interface, keyboard-driven editing,
-autosave, and batch actions.
+created by [Evan Purkhiser](https://github.com/evanpurkhiser).
+The original project provides the foundation: the Rust CLI, Things Cloud client,
+sync and cache infrastructure, and task-management commands.
+This fork builds on that work with an interactive terminal interface,
+keyboard-driven editing, autosave, and batch actions.
 
 Thanks to Evan and the upstream contributors for making this project possible.
 The original [MIT license](LICENSE) and copyright notice are retained.
@@ -20,8 +20,9 @@ Protocol reference: [Things Cloud API documentation](doc/README.md).
 
 ## TUI demo
 
-Browse Inbox and Today, view and edit task details, and schedule tasks with
-the calendar picker. Recorded with synthetic tasks in local-preview mode.
+Browse Inbox and Today, view and edit task details,
+and schedule tasks with the calendar picker.
+Recorded with synthetic tasks in local-preview mode.
 
 <img src=".github/assets/things3-tui.gif" width="720" alt="Things3 TUI demo: Inbox and Today, detail view and editing, and calendar date selection">
 
@@ -48,9 +49,10 @@ Download the archive for your platform from the
 | Linux — ARM64 | [linux-arm64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-linux-arm64.tar.gz) |
 | Linux — AMD64 / x86-64 | [linux-amd64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-linux-amd64.tar.gz) |
 
-Each archive contains the `things3` executable and license. Extract it and
-place the executable on your `PATH`. For example, after downloading the
-macOS ARM64 archive into the current directory:
+Each archive contains the `things3` executable and license.
+Extract it and place the executable on your `PATH`.
+For example, after downloading the macOS ARM64 archive into the current
+directory:
 
 ```bash
 tar -xzf things3-v0.10.1-macos-arm64.tar.gz
@@ -61,9 +63,10 @@ things3 tui --help
 ```
 
 Add that `PATH` setting to your shell configuration to keep it across sessions.
-Linux binaries are built on Ubuntu 22.04 with glibc. Release assets include
-`SHA256SUMS`; verify downloaded archives with `shasum -a 256` on macOS or
-`sha256sum` on Linux and compare with the published checksums.
+Linux binaries are built on Ubuntu 22.04 with glibc.
+Release assets include `SHA256SUMS`;
+verify downloaded archives with `shasum -a 256` on macOS or `sha256sum` on Linux
+and compare with the published checksums.
 
 ### Build from this repository
 
@@ -74,10 +77,11 @@ Requires Git and the latest stable [Rust toolchain](https://rustup.rs/)
 cargo install --git https://github.com/mh1412/things3-cloud-tui.git --branch main --locked things3-cloud
 ```
 
-The Cargo package is still named `things3-cloud`; the repository URL above
-installs **this TUI fork**. The executable is named `things3` and is installed
-in Cargo's binary directory (normally `~/.cargo/bin`). Ensure that directory
-is on your `PATH`.
+The Cargo package is still named `things3-cloud`;
+the repository URL above installs **this TUI fork**.
+The executable is named `things3` and is installed in Cargo's binary directory
+(normally `~/.cargo/bin`).
+Ensure that directory is on your `PATH`.
 
 ### From a local checkout
 
@@ -99,20 +103,23 @@ cargo run --locked -- tui
 cargo install --git https://github.com/mh1412/things3-cloud-tui.git --branch main --locked --force things3-cloud
 ```
 
-If you also have another `things3` installed, use `command -v things3` to check
-which executable your shell resolves. You can launch this installation directly
-with `~/.cargo/bin/things3 tui` when using Cargo's default installation directory.
+If you also have another `things3` installed,
+use `command -v things3` to check which executable your shell resolves.
+You can launch this installation directly with `~/.cargo/bin/things3 tui`
+when using Cargo's default installation directory.
 
 ### Terminal font
 
-**The default TUI icon mode requires a [Nerd Font](https://www.nerdfonts.com/).**
-Install a patched font such as FantasqueSansM Nerd Font or JetBrainsMono Nerd
-Font, then select it in your terminal application's profile settings. Installing
-the font alone does not change the terminal's active font.
+**The default TUI icon mode requires a
+[Nerd Font](https://www.nerdfonts.com/).**
+Install a patched font such as FantasqueSansM Nerd Font
+or JetBrainsMono Nerd Font,
+then select it in your terminal application's profile settings.
+Installing the font alone does not change the terminal's active font.
 
-For example, in iTerm2, open **Settings → Profiles → Text → Font** and choose
-the Nerd Font. Missing or incorrect fonts can display icons as boxes or cause
-alignment issues.
+For example, in iTerm2, open **Settings → Profiles → Text → Font**
+and choose the Nerd Font.
+Missing or incorrect fonts can display icons as boxes or cause alignment issues.
 
 If you prefer not to install a Nerd Font, use plain-text icons:
 
@@ -156,11 +163,12 @@ things3 --no-sync tui
 ```
 
 Browse Inbox, Today, Upcoming, Anytime, Someday, Logbook, and Projects.
-The dark theme includes colored panels, focus and selection highlights, and
-status colors. Nerd Font icons are enabled by default: select a Nerd Font
-(such as JetBrainsMono Nerd Font) in your terminal's font settings. Use
-`--icons emoji` for emoji or `--icons plain` for text symbols. The global
-`--no-color` option uses your terminal's default colors.
+The dark theme includes colored panels, focus and selection highlights,
+and status colors.
+Nerd Font icons are enabled by default: select a Nerd Font
+(such as JetBrainsMono Nerd Font) in your terminal's font settings.
+Use `--icons emoji` for emoji or `--icons plain` for text symbols.
+The global `--no-color` option uses your terminal's default colors.
 Wide terminals show task details alongside the list; on smaller terminals,
 press `Enter` or `d` to see notes, dates, tags, and checklists.
 
@@ -188,56 +196,68 @@ press `Enter` or `d` to see notes, dates, tags, and checklists.
 | `?` | Show help |
 | `q` / `Ctrl-C` | Quit |
 
-Cloud operations run in a background worker. Changes appear locally immediately
-and are queued in memory, then saved together after two seconds without keyboard
-activity. Repeated edits to the same item are combined. The status bar distinguishes
-pending changes from saved changes. Refresh and quit flush the queue first;
-failed saves retain the queue, and a failed quit-save keeps the TUI open.
+Cloud operations run in a background worker.
+Changes appear locally immediately and are queued in memory,
+then saved together after two seconds without keyboard activity.
+Repeated edits to the same item are combined.
+The status bar distinguishes pending changes from saved changes.
+Refresh and quit flush the queue first; failed saves retain the queue,
+and a failed quit-save keeps the TUI open.
 Status changes use the same validation as `mark`.
 As with other commands, `--no-sync` skips cloud reads but still permits writes.
 
 Actions apply to selected tasks, or the cursor task when nothing is selected.
-Each batch is validated in full before entering the save queue. Changing lists
-clears the selection.
+Each batch is validated in full before entering the save queue.
+Changing lists clears the selection.
 
-Selected rows are highlighted. Reordering moves each selected block one row
-down/up while preserving relative order and selection. Without a selection,
-it moves the focused task. Reordering stays within containers; Upcoming
-preserves date groups and Logbook stays date-ordered.
+Selected rows are highlighted.
+Reordering moves each selected block one row down/up
+while preserving relative order and selection.
+Without a selection, it moves the focused task.
+Reordering stays within containers;
+Upcoming preserves date groups and Logbook stays date-ordered.
 
-Press `c` to type a title directly above the list. `Enter` creates the task;
-`Esc` cancels. The new task stays focused, so press `e` to add details.
+Press `c` to type a title directly above the list.
+`Enter` creates the task; `Esc` cancels.
+The new task stays focused, so press `e` to add details.
 
-Details have **view** and **edit** modes in the same panel. On wide terminals,
-opening details focuses the existing right-hand panel; on narrow terminals,
-it fills the screen.
+Details have **view** and **edit** modes in the same panel.
+On wide terminals, opening details focuses the existing right-hand panel;
+on narrow terminals, it fills the screen.
 
-In view mode, `j/k` or arrows move between fields and checklist items. `Space`
-toggles the focused checklist item done/open; `y` completes it, `v` reopens it,
-and `-` cancels it. `t` schedules Today, `s` schedules
-Someday, and `w` opens the calendar (for the deadline when that field is focused,
-otherwise for scheduling). `e` enters edit mode; `u`/`Esc` returns to the list.
+In view mode, `j/k` or arrows move between fields and checklist items.
+`Space` toggles the focused checklist item done/open; `y` completes it,
+`v` reopens it, and `-` cancels it.
+`t` schedules Today, `s` schedules Someday, and `w` opens the calendar
+(for the deadline when that field is focused, otherwise for scheduling).
+`e` enters edit mode; `u`/`Esc` returns to the list.
 
-On a checklist item, `Shift-J` / `Shift-K` moves it down / up, keeping focus
-on the moved item. Checklist order autosaves with the other detail changes.
+On a checklist item, `Shift-J` / `Shift-K` moves it down / up,
+keeping focus on the moved item.
+Checklist order autosaves with the other detail changes.
 It includes title, multiline notes, schedule, deadline, tags,
-project/area location, and checklist titles and statuses. Use `Tab`/`Shift-Tab`
-to switch fields and `Ctrl-U` to clear a field. Edits automatically enter the
-save queue after a brief pause; no save shortcut is required. `Esc` returns to
-view mode while keeping edits (`Ctrl-S` remains an optional equivalent). In notes,
-`Enter` inserts a newline. `Ctrl-N` adds a checklist item,
-`Ctrl-D` removes the focused item, and `Ctrl-T` cycles its status. Failed saves
-keep the editor open. Invalid fields must be corrected before leaving.
+project/area location, and checklist titles and statuses.
+Use `Tab`/`Shift-Tab` to switch fields and `Ctrl-U` to clear a field.
+Edits automatically enter the save queue after a brief pause;
+no save shortcut is required.
+`Esc` returns to view mode while keeping edits
+(`Ctrl-S` remains an optional equivalent).
+In notes, `Enter` inserts a newline.
+`Ctrl-N` adds a checklist item, `Ctrl-D` removes the focused item,
+and `Ctrl-T` cycles its status.
+Failed saves keep the editor open.
+Invalid fields must be corrected before leaving.
 Project metadata editing is not included.
 
-Idle saves refresh cloud history first. If another device advances history
-before the commit, the TUI refreshes and retries once; failed retries keep the
-pending queue.
+Idle saves refresh cloud history first.
+If another device advances history before the commit,
+the TUI refreshes and retries once; failed retries keep the pending queue.
 
 In the calendar, arrows (or `h/j/k/l`) move by day/week, `PgUp`/`PgDn`
-(or `[`/`]`) change months, and `t` jumps to Today. `Enter` applies the
-date; `Esc`/`u` goes back. In details, `Ctrl-P` opens the calendar for the
-deadline when that field is focused, otherwise for the schedule field.
+(or `[`/`]`) change months, and `t` jumps to Today.
+`Enter` applies the date; `Esc`/`u` goes back.
+In details, `Ctrl-P` opens the calendar for the deadline when
+that field is focused, otherwise for the schedule field.
 
 To try the interface with sample data from a source checkout:
 
@@ -245,16 +265,26 @@ To try the interface with sample data from a source checkout:
 cargo run -- --load-journal tests/fixtures/tui.json tui --view inbox
 ```
 
-A loaded journal (or `--no-cloud`) enables **local preview**: status changes
-stay in memory, and `r` reloads the original fixture/cache.
+A loaded journal (or `--no-cloud`) enables **local preview**:
+status changes stay in memory, and `r` reloads the original fixture/cache.
+
+## Live cloud tests
+
+Live cloud tests are opt-in for this fork.
+Configure repository secrets `THINGS3_LIVE_TEST_EMAIL`
+and `THINGS3_LIVE_TEST_PASSWORD` for a dedicated test account,
+then run the **Live Cloud Test** workflow manually.
+To also run it on pushes,
+set the repository variable `THINGS3_LIVE_TEST_ENABLED` to `true`.
+Explicitly requested runs still fail if either secret is missing.
 
 ## Features
 
 ### Keyboard-first navigation
 
 - Inbox, Today, Upcoming, Anytime, Someday, Logbook, and Projects tabs.
-- Gmail-style navigation, highlighted multi-selection, and list search across
-  titles, notes, and checklists.
+- Gmail-style navigation, highlighted multi-selection,
+  and list search across titles, notes, and checklists.
 - Shared details panel with view/edit modes and a responsive two-pane layout.
 - Dark styling with Nerd Font, emoji, or plain-text icons.
 
@@ -274,8 +304,9 @@ stay in memory, and `r` reloads the original fixture/cache.
 - Incremental sync and cached reads through the upstream Cloud client.
 - Fixture-based local preview for trying workflows and recording demos.
 
-The inherited CLI commands remain available for scripting and workflows outside
-the TUI. Run `things3 --help` or `things3 <command> --help` for their options.
+The inherited CLI commands remain available for scripting
+and workflows outside the TUI.
+Run `things3 --help` or `things3 <command> --help` for their options.
 
 See [the roadmap](ROADMAP.md) for this fork's scope and current gaps.
 

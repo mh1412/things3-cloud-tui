@@ -296,12 +296,12 @@ impl ThingsStore {
             .collect();
 
         out.sort_by_key(|task| {
-            if task.today_index == 0 {
-                let sr_ts = task.start_date.map(|d| d.timestamp()).unwrap_or(0);
-                (0i32, Reverse(sr_ts), Reverse(task.index))
-            } else {
-                (1i32, Reverse(task.today_index as i64), Reverse(task.index))
-            }
+            (
+                Reverse(task.today_index_reference.unwrap_or(0)),
+                task.today_index,
+                Reverse(task.index),
+                task.uuid.clone(),
+            )
         });
         out
     }

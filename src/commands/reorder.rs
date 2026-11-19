@@ -82,8 +82,8 @@ pub(crate) fn reorder_changes(
                 task.entity.can_upgrade_to_task7(),
                 "Unsupported task entity for reordering"
             );
-            let sort_index = i32::try_from(order.len() - index)?;
-            if task.today_index != sort_index {
+            let sort_index = i32::try_from(index + 1)?;
+            if task.today_index != sort_index || task.today_index_reference != Some(today_ts) {
                 changes.insert(
                     task.uuid.to_string(),
                     WireObject::update(

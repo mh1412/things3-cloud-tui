@@ -230,6 +230,29 @@ mod tests {
     }
 
     #[test]
+    fn today_uses_reference_date_then_ascending_manual_order() {
+        let mut m = model();
+        let first = m.tasks[0].uuid.clone();
+        let second = m.tasks[1].uuid.clone();
+        for task in m.store.tasks_by_uuid.values_mut() {
+            task.start = crate::wire::task::TaskStart::Anytime;
+            task.start_date = Some(m.today);
+            task.today_index_reference = Some(100);
+            task.today_index = if task.uuid == first { 1 } else { 2 };
+        }
+        assert_eq!(List::Today.tasks(&m.store, &m.today)[0].uuid, first);
+        m.store
+            .tasks_by_uuid
+            .get_mut(&second)
+            .unwrap()
+            .today_index_reference = Some(200);
+        assert_eq!(List::Today.tasks(&m.store, &m.today)[0].uuid, second);
+        // An unassigned index must not jump ahead of a newer reference date.
+        m.store.tasks_by_uuid.get_mut(&first).unwrap().today_index = 0;
+        assert_eq!(List::Today.tasks(&m.store, &m.today)[0].uuid, second);
+    }
+
+    #[test]
     fn selection_survives_refresh_and_clamps_when_item_disappears() {
         let mut m = model();
         m.move_selection(1);

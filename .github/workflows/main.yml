@@ -172,6 +172,8 @@ jobs:
 
   build_darwin_arm64:
     name: Build darwin/arm64
+    # Hosted macOS capacity is unreliable; reserve it for release runs.
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     runs-on: macos-15
     steps:
       - name: Checkout
@@ -209,7 +211,7 @@ jobs:
   publish_collect:
     name: Collect builds
     runs-on: ubuntu-latest
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
     needs:
       - release_meta
       - build_linux_amd64

@@ -268,6 +268,17 @@ cargo run -- --load-journal tests/fixtures/tui.json tui --view inbox
 A loaded journal (or `--no-cloud`) enables **local preview**:
 status changes stay in memory, and `r` reloads the original fixture/cache.
 
+## Release workflow
+
+Binary builds and releases are manual.
+Pushing commits or tags, or publishing a GitHub release,
+does not trigger binary builds.
+Automatic lint checks remain enabled.
+The **Main** and **Release binaries** workflows can still be started manually
+from GitHub Actions when needed.
+For locally prepared releases,
+upload the platform archives and `SHA256SUMS` directly to the release.
+
 ## Live cloud tests
 
 Live cloud tests are opt-in for this fork.

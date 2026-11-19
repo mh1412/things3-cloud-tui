@@ -7,18 +7,16 @@ on:
         description: Existing release tag to build
         required: true
         type: string
-  release:
-    types: [published]
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-binaries-${{ inputs.tag || github.event.release.tag_name }}
+  group: release-binaries-${{ inputs.tag }}
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
+  RELEASE_TAG: ${{ inputs.tag }}
   CARGO_TERM_COLOR: always
   TZ: UTC
 

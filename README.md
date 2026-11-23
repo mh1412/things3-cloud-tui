@@ -42,12 +42,13 @@ things3 mark <task-id> --done
 Download the archive for your platform from the
 [latest release](https://github.com/mh1412/things3-cloud-tui/releases/latest):
 
-| Platform | v0.10.1 download |
+| Platform | Archive suffix in the latest release |
 | --- | --- |
-| macOS — Apple Silicon (ARM64) | [macos-arm64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-macos-arm64.tar.gz) |
-| macOS — Intel (AMD64) | [macos-amd64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-macos-amd64.tar.gz) |
-| Linux — ARM64 | [linux-arm64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-linux-arm64.tar.gz) |
-| Linux — AMD64 / x86-64 | [linux-amd64](https://github.com/mh1412/things3-cloud-tui/releases/download/v0.10.1/things3-v0.10.1-linux-amd64.tar.gz) |
+| macOS — Apple Silicon (ARM64) | `macos-arm64.tar.gz` |
+| macOS — Intel (AMD64) | `macos-amd64.tar.gz` |
+| Linux — ARM64 | `linux-arm64.tar.gz` |
+| Linux — AMD64 / x86-64 | `linux-amd64.tar.gz` |
+| Windows — AMD64 / x86-64 | `windows-amd64.zip` |
 
 Each archive contains the `things3` executable and license.
 Extract it and place the executable on your `PATH`.
@@ -55,7 +56,7 @@ For example, after downloading the macOS ARM64 archive into the current
 directory:
 
 ```bash
-tar -xzf things3-v0.10.1-macos-arm64.tar.gz
+tar -xzf things3-v0.10.3-macos-arm64.tar.gz
 mkdir -p ~/.local/bin
 install -m 755 things3 ~/.local/bin/things3
 export PATH="$HOME/.local/bin:$PATH"
